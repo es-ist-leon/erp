@@ -1,0 +1,173 @@
+/* HolzbauERP Main Stylesheet */
+
+/* Global */
+QWidget {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 13px;
+}
+
+QMainWindow {
+    background-color: #f5f5f5;
+}
+
+/* Buttons */
+QPushButton {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+QPushButton:hover {
+    background-color: #d0d0d0;
+}
+
+QPushButton:pressed {
+    background-color: #c0c0c0;
+}
+
+/* Input fields */
+QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QDateEdit {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
+    border-color: #2563eb;
+}
+
+/* ComboBox */
+QComboBox {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 30px;
+}
+
+QComboBox::down-arrow {
+    width: 12px;
+    height: 12px;
+}
+
+/* Tables */
+QTableWidget {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    gridline-color: #f0f0f0;
+}
+
+QTableWidget::item {
+    padding: 8px;
+}
+
+QTableWidget::item:selected {
+    background-color: #e0e7ff;
+    color: #1e40af;
+}
+
+QHeaderView::section {
+    background-color: #f8fafc;
+    padding: 10px;
+    border: none;
+    border-bottom: 2px solid #e0e0e0;
+    font-weight: bold;
+}
+
+/* Tabs */
+QTabWidget::pane {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+QTabBar::tab {
+    padding: 10px 20px;
+    margin-right: 2px;
+    background-color: #f0f0f0;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+QTabBar::tab:selected {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-bottom: none;
+}
+
+/* GroupBox */
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    margin-top: 12px;
+    padding-top: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 5px;
+}
+
+/* ScrollBar */
+QScrollBar:vertical {
+    border: none;
+    background-color: #f0f0f0;
+    width: 10px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #c0c0c0;
+    border-radius: 5px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #a0a0a0;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+/* Menu */
+QMenuBar {
+    background-color: #fff;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+QMenuBar::item {
+    padding: 8px 12px;
+}
+
+QMenuBar::item:selected {
+    background-color: #e0e7ff;
+}
+
+QMenu {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+}
+
+QMenu::item {
+    padding: 8px 30px;
+}
+
+QMenu::item:selected {
+    background-color: #e0e7ff;
+}
+
+/* Message Boxes */
+QMessageBox {
+    background-color: #fff;
+}

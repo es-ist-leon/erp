@@ -1,0 +1,28 @@
+# Qt GUI
+PyQt6==6.6.1
+PyQt6-Qt6==6.6.1
+PyQt6-sip==13.6.0
+PyQt6-Charts==6.6.0
+
+# Database
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+
+# Security (JWT only - password hashing uses built-in hashlib)
+python-jose[cryptography]>=3.3.0
+
+# Utilities
+python-dotenv==1.0.0
+python-dateutil==2.8.2
+
+# System Monitoring
+psutil==5.9.8
+
+# PDF Generation
+reportlab==4.0.8
+
+# Excel Export
+openpyxl==3.1.2
+
+# Build
+pyinstaller==6.3.0
