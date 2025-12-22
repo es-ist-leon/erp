@@ -74,9 +74,10 @@ def django_dottedstring_imports(django_root_dir):
         for cl in settings.AUTHENTICATION_BACKENDS:
             cl = _remove_class(cl)
             hiddenimports.append(cl)
-    if hasattr(settings, 'DEFAULT_FILE_STORAGE'):
-        cl = _remove_class(settings.DEFAULT_FILE_STORAGE)
-        hiddenimports.append(cl)
+    # Deprecated since 4.2, may be None until it is removed
+    cl = getattr(settings, 'DEFAULT_FILE_STORAGE', None)
+    if cl:
+        hiddenimports.append(_remove_class(cl))
     if hasattr(settings, 'FILE_UPLOAD_HANDLERS'):
         for cl in settings.FILE_UPLOAD_HANDLERS:
             cl = _remove_class(cl)
@@ -89,7 +90,7 @@ def django_dottedstring_imports(django_root_dir):
     if hasattr(settings, 'TEMPLATES'):
         for templ in settings.TEMPLATES:
             backend = _remove_class(templ['BACKEND'])
-            hiddenimports += backend
+            hiddenimports.append(backend)
             # Include context_processors.
             if hasattr(templ, 'OPTIONS'):
                 if hasattr(templ['OPTIONS'], 'context_processors'):

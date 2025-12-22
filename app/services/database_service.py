@@ -1,5 +1,5 @@
 """
-Database Service - Optimized SQLAlchemy connection with caching
+Database Service - Optimized SQLAlchemy connection with advanced caching
 """
 from sqlalchemy import create_engine, text, inspect, event
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
@@ -11,51 +11,7 @@ import os
 
 from shared.config import get_settings
 from shared.database import Base
-
-
-class QueryCache:
-    """Simple in-memory cache for frequently accessed data"""
-    
-    def __init__(self, max_size=1000, ttl_seconds=300):
-        self._cache = {}
-        self._timestamps = {}
-        self._max_size = max_size
-        self._ttl = ttl_seconds
-        self._lock = Lock()
-    
-    def get(self, key):
-        with self._lock:
-            if key in self._cache:
-                import time
-                if time.time() - self._timestamps[key] < self._ttl:
-                    return self._cache[key]
-                else:
-                    del self._cache[key]
-                    del self._timestamps[key]
-        return None
-    
-    def set(self, key, value):
-        with self._lock:
-            import time
-            if len(self._cache) >= self._max_size:
-                # Remove oldest entries
-                oldest = sorted(self._timestamps.items(), key=lambda x: x[1])[:100]
-                for k, _ in oldest:
-                    del self._cache[k]
-                    del self._timestamps[k]
-            self._cache[key] = value
-            self._timestamps[key] = time.time()
-    
-    def invalidate(self, pattern=None):
-        with self._lock:
-            if pattern:
-                keys_to_remove = [k for k in self._cache if pattern in str(k)]
-                for k in keys_to_remove:
-                    del self._cache[k]
-                    del self._timestamps[k]
-            else:
-                self._cache.clear()
-                self._timestamps.clear()
+from app.services.cache_service import CacheService, get_cache_service
 
 
 class DatabaseService:
@@ -81,7 +37,8 @@ class DatabaseService:
         self.SessionLocal = None
         self._scoped_session = None
         self._session = None
-        self.cache = QueryCache()
+        # Use new cache service
+        self.cache = get_cache_service()
     
     def connect(self, max_retries=3) -> bool:
         """Establish optimized database connection with retry logic"""

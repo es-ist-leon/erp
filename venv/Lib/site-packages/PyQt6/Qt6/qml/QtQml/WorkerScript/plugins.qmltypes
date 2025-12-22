@@ -8,6 +8,7 @@ import QtQuick.tooling 1.2
 Module {
     Component {
         file: "private/qquickworkerscript_p.h"
+        lineNumber: 51
         name: "QQuickWorkerScript"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -25,6 +26,7 @@ Module {
             write: "setSource"
             notify: "sourceChanged"
             index: 0
+            lineNumber: 55
         }
         Property {
             name: "ready"
@@ -33,14 +35,16 @@ Module {
             read: "ready"
             notify: "readyChanged"
             index: 1
+            lineNumber: 56
             isReadonly: true
         }
-        Signal { name: "sourceChanged" }
-        Signal { name: "readyChanged"; revision: 527 }
+        Signal { name: "sourceChanged"; lineNumber: 75 }
+        Signal { name: "readyChanged"; revision: 527; lineNumber: 76 }
         Signal {
             name: "message"
+            lineNumber: 77
             Parameter { name: "messageObject"; type: "QJSValue" }
         }
-        Method { name: "sendMessage"; isJavaScriptFunction: true }
+        Method { name: "sendMessage"; isJavaScriptFunction: true; lineNumber: 72 }
     }
 }

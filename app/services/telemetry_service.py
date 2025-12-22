@@ -93,9 +93,15 @@ class TelemetryService:
     def set_context(self, user_id: str = None, tenant_id: str = None, session_id: str = None):
         """Setzt den aktuellen Kontext"""
         if user_id:
-            self._current_user_id = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+            try:
+                self._current_user_id = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+            except (ValueError, AttributeError):
+                self._current_user_id = None
         if tenant_id:
-            self._current_tenant_id = uuid.UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
+            try:
+                self._current_tenant_id = uuid.UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
+            except (ValueError, AttributeError):
+                self._current_tenant_id = None
         if session_id:
             self._current_session_id = session_id
     

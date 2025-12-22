@@ -20,15 +20,9 @@ def main():
     app.setApplicationVersion("1.0.0")
     app.setOrganizationName("HolzbauERP")
     
-    # Set default font
-    font = QFont("Segoe UI", 10)
-    app.setFont(font)
-    
-    # Load stylesheet (minimal blocking)
-    style_path = os.path.join(os.path.dirname(__file__), "resources", "styles", "main.qss")
-    if os.path.exists(style_path):
-        with open(style_path, "r", encoding="utf-8") as f:
-            app.setStyleSheet(f.read())
+    # Apply Material Design Theme
+    from app.ui.material_theme import apply_material_theme
+    apply_material_theme(app, theme="light_blue.xml")
     
     # Import database service only when needed
     from app.services.database_service import DatabaseService

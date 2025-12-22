@@ -1,5 +1,5 @@
 """
-Telemetrie-Dashboard Widget
+Telemetrie-Dashboard Widget - Professional Design
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -18,11 +18,27 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import json
 
+# Professional color palette
+COLORS = {
+    'primary': '#1565C0',
+    'primary_light': '#1976D2',
+    'success': '#2E7D32',
+    'warning': '#F57C00',
+    'error': '#C62828',
+    'surface': '#FFFFFF',
+    'background': '#F5F5F5',
+    'card': '#FFFFFF',
+    'text': '#212121',
+    'text_secondary': '#757575',
+    'border': '#E0E0E0',
+    'divider': '#EEEEEE'
+}
+
 
 class MetricCard(QFrame):
-    """Karte für einzelne Metrik"""
+    """Professional metric card"""
     
-    def __init__(self, title: str, value: str = "0", subtitle: str = "", icon: str = "📊", color: str = "#3498db"):
+    def __init__(self, title: str, value: str = "0", subtitle: str = "", icon: str = "📊", color: str = "#1565C0"):
         super().__init__()
         self.setObjectName("metricCard")
         self.color = color
@@ -31,73 +47,60 @@ class MetricCard(QFrame):
     def setup_ui(self, title: str, value: str, subtitle: str, icon: str):
         self.setStyleSheet(f"""
             #metricCard {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {self.color}, stop:1 {self._darken_color(self.color)});
-                border-radius: 12px;
-                padding: 20px;
-                min-height: 120px;
-            }}
-            QLabel {{
-                color: white;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
+                border-left: 4px solid {self.color};
             }}
         """)
         
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
         
-        # Header mit Icon
-        header = QHBoxLayout()
-        
+        # Icon
         icon_label = QLabel(icon)
         icon_label.setFont(QFont("Segoe UI Emoji", 24))
-        header.addWidget(icon_label)
+        icon_label.setStyleSheet(f"color: {self.color};")
+        layout.addWidget(icon_label)
         
-        header.addStretch()
+        # Content
+        content = QVBoxLayout()
+        content.setSpacing(2)
         
-        layout.addLayout(header)
-        
-        # Wert
-        self.value_label = QLabel(value)
-        self.value_label.setFont(QFont("Segoe UI", 32, QFont.Weight.Bold))
-        layout.addWidget(self.value_label)
-        
-        # Titel
+        # Title
         title_label = QLabel(title)
-        title_label.setFont(QFont("Segoe UI", 12))
-        title_label.setStyleSheet("color: rgba(255,255,255,0.9);")
-        layout.addWidget(title_label)
+        title_label.setFont(QFont("Segoe UI", 11))
+        title_label.setStyleSheet("color: #757575;")
+        content.addWidget(title_label)
+        
+        # Value
+        self.value_label = QLabel(value)
+        self.value_label.setFont(QFont("Segoe UI", 24, QFont.Weight.DemiBold))
+        self.value_label.setStyleSheet("color: #212121;")
+        content.addWidget(self.value_label)
         
         # Subtitle
         if subtitle:
             self.subtitle_label = QLabel(subtitle)
             self.subtitle_label.setFont(QFont("Segoe UI", 10))
-            self.subtitle_label.setStyleSheet("color: rgba(255,255,255,0.7);")
-            layout.addWidget(self.subtitle_label)
+            self.subtitle_label.setStyleSheet("color: #9e9e9e;")
+            content.addWidget(self.subtitle_label)
         else:
             self.subtitle_label = None
+        
+        layout.addLayout(content)
+        layout.addStretch()
     
     def update_value(self, value: str, subtitle: str = None):
-        """Aktualisiert den Wert"""
+        """Update value"""
         self.value_label.setText(value)
         if subtitle and self.subtitle_label:
             self.subtitle_label.setText(subtitle)
-    
-    def _darken_color(self, color: str) -> str:
-        """Dunkelt eine Farbe ab"""
-        # Einfache Abdunkelung
-        if color.startswith('#'):
-            r = int(color[1:3], 16)
-            g = int(color[3:5], 16)
-            b = int(color[5:7], 16)
-            r = max(0, r - 40)
-            g = max(0, g - 40)
-            b = max(0, b - 40)
-            return f"#{r:02x}{g:02x}{b:02x}"
-        return color
 
 
 class HealthIndicator(QFrame):
-    """System-Health-Indikator"""
+    """Professional health indicator"""
     
     def __init__(self, name: str, status: str = "healthy"):
         super().__init__()
@@ -108,46 +111,46 @@ class HealthIndicator(QFrame):
     def setup_ui(self):
         self.setStyleSheet("""
             QFrame {
-                background: #2d3748;
-                border-radius: 8px;
-                padding: 12px;
+                background: white;
+                border-radius: 6px;
+                border: 1px solid #e0e0e0;
             }
         """)
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setContentsMargins(12, 10, 12, 10)
         
-        # Status-Punkt
+        # Status dot
         self.status_dot = QLabel("●")
-        self.status_dot.setFont(QFont("Segoe UI", 14))
+        self.status_dot.setFont(QFont("Segoe UI", 12))
         layout.addWidget(self.status_dot)
         
         # Name
         name_label = QLabel(self.name)
         name_label.setFont(QFont("Segoe UI", 11))
-        name_label.setStyleSheet("color: white;")
+        name_label.setStyleSheet("color: #424242;")
         layout.addWidget(name_label)
         
         layout.addStretch()
         
-        # Status-Text
+        # Status text
         self.status_label = QLabel()
         self.status_label.setFont(QFont("Segoe UI", 10))
         layout.addWidget(self.status_label)
         
-        # Wert
+        # Value
         self.value_label = QLabel()
-        self.value_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self.value_label.setStyleSheet("color: white;")
+        self.value_label.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
+        self.value_label.setStyleSheet("color: #212121;")
         layout.addWidget(self.value_label)
     
     def set_status(self, status: str, value: str = ""):
-        """Setzt den Status"""
+        """Set status"""
         colors = {
-            'healthy': '#10b981',
-            'degraded': '#f59e0b',
-            'unhealthy': '#ef4444',
-            'unknown': '#6b7280'
+            'healthy': '#2E7D32',
+            'degraded': '#F57C00',
+            'unhealthy': '#C62828',
+            'unknown': '#9E9E9E'
         }
         color = colors.get(status, colors['unknown'])
         
@@ -160,7 +163,7 @@ class HealthIndicator(QFrame):
 
 
 class ErrorListWidget(QFrame):
-    """Widget für Fehler-Liste"""
+    """Professional error list widget"""
     
     def __init__(self):
         super().__init__()
@@ -169,28 +172,31 @@ class ErrorListWidget(QFrame):
     def setup_ui(self):
         self.setStyleSheet("""
             QFrame {
-                background: #1e2530;
-                border-radius: 12px;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
             }
             QTableWidget {
                 background: transparent;
                 border: none;
-                color: white;
-                gridline-color: #374151;
+                color: #212121;
+                gridline-color: #eeeeee;
             }
             QTableWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #374151;
+                padding: 10px;
+                border-bottom: 1px solid #eeeeee;
             }
             QTableWidget::item:selected {
-                background: #3b82f6;
+                background: #E3F2FD;
+                color: #1565C0;
             }
             QHeaderView::section {
-                background: #374151;
-                color: white;
-                padding: 10px;
+                background: #fafafa;
+                color: #424242;
+                padding: 12px;
                 border: none;
-                font-weight: bold;
+                border-bottom: 1px solid #e0e0e0;
+                font-weight: 600;
             }
         """)
         
@@ -199,35 +205,36 @@ class ErrorListWidget(QFrame):
         
         # Header
         header = QWidget()
-        header.setStyleSheet("background: #374151; border-radius: 12px 12px 0 0;")
+        header.setStyleSheet("background: #fafafa; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e0e0e0;")
         header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(16, 12, 16, 12)
         
         title = QLabel("🐛 Aktuelle Fehler")
-        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        title.setStyleSheet("color: white;")
+        title.setFont(QFont("Segoe UI", 13, QFont.Weight.DemiBold))
+        title.setStyleSheet("color: #212121;")
         header_layout.addWidget(title)
         
         header_layout.addStretch()
         
-        self.refresh_btn = QPushButton("🔄 Aktualisieren")
+        self.refresh_btn = QPushButton("Aktualisieren")
         self.refresh_btn.setStyleSheet("""
             QPushButton {
-                background: #3b82f6;
+                background: #1565C0;
                 color: white;
                 border: none;
                 padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
+                border-radius: 4px;
+                font-weight: 500;
             }
             QPushButton:hover {
-                background: #2563eb;
+                background: #1976D2;
             }
         """)
         header_layout.addWidget(self.refresh_btn)
         
         layout.addWidget(header)
         
-        # Tabelle
+        # Table
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Typ", "Nachricht", "Modul", "Anzahl", "Zuletzt"])
@@ -239,30 +246,30 @@ class ErrorListWidget(QFrame):
         layout.addWidget(self.table)
     
     def set_errors(self, errors: List[Dict[str, Any]]):
-        """Setzt die Fehler-Liste"""
+        """Set error list"""
         self.table.setRowCount(len(errors))
         
         for row, error in enumerate(errors):
-            # Typ
+            # Type
             type_item = QTableWidgetItem(error.get('error_type', ''))
-            type_item.setForeground(QColor('#ef4444'))
+            type_item.setForeground(QColor('#C62828'))
             self.table.setItem(row, 0, type_item)
             
-            # Nachricht
+            # Message
             msg = error.get('error_message', '')[:100]
             self.table.setItem(row, 1, QTableWidgetItem(msg))
             
-            # Modul
+            # Module
             self.table.setItem(row, 2, QTableWidgetItem(error.get('module', '')))
             
-            # Anzahl
+            # Count
             count_item = QTableWidgetItem(str(error.get('occurrence_count', 1)))
             count_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if error.get('occurrence_count', 0) > 10:
-                count_item.setForeground(QColor('#ef4444'))
+                count_item.setForeground(QColor('#C62828'))
             self.table.setItem(row, 3, count_item)
             
-            # Zuletzt
+            # Last seen
             last_seen = error.get('last_seen', '')
             if last_seen:
                 try:
@@ -274,7 +281,7 @@ class ErrorListWidget(QFrame):
 
 
 class PerformanceChart(QFrame):
-    """Performance-Chart Widget"""
+    """Professional performance chart widget"""
     
     def __init__(self, title: str = "Performance"):
         super().__init__()
@@ -284,27 +291,28 @@ class PerformanceChart(QFrame):
     def setup_ui(self):
         self.setStyleSheet("""
             QFrame {
-                background: #1e2530;
-                border-radius: 12px;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
             }
         """)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         
-        # Titel
+        # Title
         title_label = QLabel(self.title)
-        title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: white;")
+        title_label.setFont(QFont("Segoe UI", 13, QFont.Weight.DemiBold))
+        title_label.setStyleSheet("color: #212121;")
         layout.addWidget(title_label)
         
-        # Chart (nur wenn PyQt6-Charts verfügbar)
+        # Chart
         if HAS_CHARTS:
             self.chart = QChart()
             self.chart.setBackgroundVisible(False)
             self.chart.setTitle("")
             self.chart.legend().setVisible(True)
-            self.chart.legend().setLabelColor(QColor("white"))
+            self.chart.legend().setLabelColor(QColor("#424242"))
             
             self.chart_view = QChartView(self.chart)
             self.chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -312,14 +320,13 @@ class PerformanceChart(QFrame):
             
             layout.addWidget(self.chart_view)
         else:
-            # Fallback ohne Charts
             placeholder = QLabel("📊 Charts nicht verfügbar\n(PyQt6-Charts installieren)")
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            placeholder.setStyleSheet("color: #6b7280; font-size: 14px;")
+            placeholder.setStyleSheet("color: #9e9e9e; font-size: 14px;")
             layout.addWidget(placeholder)
     
     def set_line_data(self, data: List[Dict[str, Any]], x_key: str, y_key: str, name: str = "Data"):
-        """Setzt Liniendaten"""
+        """Set line data"""
         if not HAS_CHARTS:
             return
             
@@ -327,7 +334,7 @@ class PerformanceChart(QFrame):
         
         series = QLineSeries()
         series.setName(name)
-        series.setColor(QColor("#3b82f6"))
+        series.setColor(QColor("#1565C0"))
         
         for i, point in enumerate(data):
             series.append(i, point.get(y_key, 0))
@@ -335,20 +342,20 @@ class PerformanceChart(QFrame):
         self.chart.addSeries(series)
         self.chart.createDefaultAxes()
         
-        # Achsen stylen
+        # Style axes
         for axis in self.chart.axes():
-            axis.setLabelsColor(QColor("white"))
-            axis.setGridLineColor(QColor("#374151"))
+            axis.setLabelsColor(QColor("#424242"))
+            axis.setGridLineColor(QColor("#eeeeee"))
     
     def set_bar_data(self, categories: List[str], values: List[float], name: str = "Data"):
-        """Setzt Balkendaten"""
+        """Set bar data"""
         if not HAS_CHARTS:
             return
             
         self.chart.removeAllSeries()
         
         bar_set = QBarSet(name)
-        bar_set.setColor(QColor("#3b82f6"))
+        bar_set.setColor(QColor("#1565C0"))
         
         for value in values:
             bar_set.append(value)
@@ -358,23 +365,23 @@ class PerformanceChart(QFrame):
         
         self.chart.addSeries(series)
         
-        # X-Achse
+        # X-Axis
         axis_x = QBarCategoryAxis()
         axis_x.append(categories)
-        axis_x.setLabelsColor(QColor("white"))
+        axis_x.setLabelsColor(QColor("#424242"))
         self.chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
         series.attachAxis(axis_x)
         
-        # Y-Achse
+        # Y-Axis
         axis_y = QValueAxis()
-        axis_y.setLabelsColor(QColor("white"))
-        axis_y.setGridLineColor(QColor("#374151"))
+        axis_y.setLabelsColor(QColor("#424242"))
+        axis_y.setGridLineColor(QColor("#eeeeee"))
         self.chart.addAxis(axis_y, Qt.AlignmentFlag.AlignLeft)
         series.attachAxis(axis_y)
 
 
 class TelemetryDashboard(QWidget):
-    """Hauptwidget für das Telemetrie-Dashboard"""
+    """Professional telemetry dashboard"""
     
     def __init__(self, db_service, user=None):
         super().__init__()
@@ -389,8 +396,8 @@ class TelemetryDashboard(QWidget):
     def setup_ui(self):
         self.setStyleSheet("""
             QWidget {
-                background: #111827;
-                color: white;
+                background: #f5f5f5;
+                color: #212121;
             }
             QScrollArea {
                 border: none;
@@ -401,24 +408,27 @@ class TelemetryDashboard(QWidget):
                 background: transparent;
             }
             QTabBar::tab {
-                background: #374151;
-                color: white;
+                background: white;
+                color: #757575;
                 padding: 12px 24px;
-                border: none;
-                border-radius: 8px 8px 0 0;
-                margin-right: 4px;
+                border: 1px solid #e0e0e0;
+                border-bottom: none;
+                border-radius: 6px 6px 0 0;
+                margin-right: 2px;
             }
             QTabBar::tab:selected {
-                background: #3b82f6;
+                background: #1565C0;
+                color: white;
+                border-color: #1565C0;
             }
             QTabBar::tab:hover:!selected {
-                background: #4b5563;
+                background: #fafafa;
             }
         """)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(24)
+        layout.setSpacing(20)
         
         # Header
         header = self._create_header()
@@ -436,55 +446,59 @@ class TelemetryDashboard(QWidget):
         layout.addWidget(tabs)
     
     def _create_header(self) -> QWidget:
-        """Erstellt den Header"""
+        """Create header"""
         header = QWidget()
         layout = QHBoxLayout(header)
         layout.setContentsMargins(0, 0, 0, 0)
         
-        # Titel
+        # Title
         title = QLabel("📈 Telemetrie Dashboard")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 22, QFont.Weight.DemiBold))
+        title.setStyleSheet("color: #212121;")
         layout.addWidget(title)
         
         layout.addStretch()
         
-        # Zeitraum-Auswahl
+        # Period selection
         self.period_combo = QComboBox()
         self.period_combo.addItems(["Letzte 24 Stunden", "Letzte 7 Tage", "Letzte 30 Tage", "Letzte 90 Tage"])
         self.period_combo.setStyleSheet("""
             QComboBox {
-                background: #374151;
-                color: white;
+                background: white;
+                color: #212121;
                 padding: 10px 16px;
-                border-radius: 8px;
-                border: none;
+                border-radius: 6px;
+                border: 1px solid #e0e0e0;
                 min-width: 150px;
+            }
+            QComboBox:hover {
+                border-color: #bdbdbd;
             }
             QComboBox::drop-down {
                 border: none;
             }
             QComboBox QAbstractItemView {
-                background: #374151;
-                color: white;
-                selection-background-color: #3b82f6;
+                background: white;
+                color: #212121;
+                selection-background-color: #E3F2FD;
             }
         """)
         self.period_combo.currentIndexChanged.connect(self.load_data)
         layout.addWidget(self.period_combo)
         
-        # Refresh-Button
-        refresh_btn = QPushButton("🔄 Aktualisieren")
+        # Refresh button
+        refresh_btn = QPushButton("Aktualisieren")
         refresh_btn.setStyleSheet("""
             QPushButton {
-                background: #3b82f6;
+                background: #1565C0;
                 color: white;
                 border: none;
                 padding: 10px 20px;
-                border-radius: 8px;
-                font-weight: bold;
+                border-radius: 6px;
+                font-weight: 500;
             }
             QPushButton:hover {
-                background: #2563eb;
+                background: #1976D2;
             }
         """)
         refresh_btn.clicked.connect(self.load_data)
@@ -493,25 +507,25 @@ class TelemetryDashboard(QWidget):
         return header
     
     def _create_overview_tab(self) -> QWidget:
-        """Erstellt die Übersicht-Tab"""
+        """Create overview tab"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(24)
+        layout.setSpacing(20)
         
-        # Metric Cards
+        # Metric cards
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(16)
         
-        self.events_card = MetricCard("Events (gesamt)", "0", "Letzte 7 Tage", "📊", "#3b82f6")
+        self.events_card = MetricCard("Events (gesamt)", "0", "Letzte 7 Tage", "📊", "#1565C0")
         cards_layout.addWidget(self.events_card)
         
-        self.errors_card = MetricCard("Fehler", "0", "Ungelöst", "🐛", "#ef4444")
+        self.errors_card = MetricCard("Fehler", "0", "Ungelöst", "🐛", "#C62828")
         cards_layout.addWidget(self.errors_card)
         
-        self.sessions_card = MetricCard("Aktive Sessions", "0", "Jetzt", "👥", "#10b981")
+        self.sessions_card = MetricCard("Aktive Sessions", "0", "Jetzt", "👥", "#2E7D32")
         cards_layout.addWidget(self.sessions_card)
         
-        self.performance_card = MetricCard("Ø Antwortzeit", "0 ms", "", "⚡", "#f59e0b")
+        self.performance_card = MetricCard("Ø Antwortzeit", "0 ms", "", "⚡", "#F57C00")
         cards_layout.addWidget(self.performance_card)
         
         layout.addLayout(cards_layout)
@@ -531,43 +545,44 @@ class TelemetryDashboard(QWidget):
         return widget
     
     def _create_performance_tab(self) -> QWidget:
-        """Erstellt die Performance-Tab"""
+        """Create performance tab"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(24)
+        layout.setSpacing(20)
         
-        # Performance-Metriken
+        # Performance metrics
         metrics_layout = QHBoxLayout()
         metrics_layout.setSpacing(16)
         
-        self.avg_response_card = MetricCard("Ø Antwortzeit", "0 ms", "", "⏱️", "#3b82f6")
+        self.avg_response_card = MetricCard("Ø Antwortzeit", "0 ms", "", "⏱️", "#1565C0")
         metrics_layout.addWidget(self.avg_response_card)
         
-        self.max_response_card = MetricCard("Max. Antwortzeit", "0 ms", "", "📈", "#ef4444")
+        self.max_response_card = MetricCard("Max. Antwortzeit", "0 ms", "", "📈", "#C62828")
         metrics_layout.addWidget(self.max_response_card)
         
-        self.request_count_card = MetricCard("Requests", "0", "Gesamt", "📊", "#10b981")
+        self.request_count_card = MetricCard("Requests", "0", "Gesamt", "📊", "#2E7D32")
         metrics_layout.addWidget(self.request_count_card)
         
-        self.db_time_card = MetricCard("Ø DB-Zeit", "0 ms", "", "🗄️", "#f59e0b")
+        self.db_time_card = MetricCard("Ø DB-Zeit", "0 ms", "", "🗄️", "#F57C00")
         metrics_layout.addWidget(self.db_time_card)
         
         layout.addLayout(metrics_layout)
         
-        # Performance-Chart
+        # Performance chart
         self.perf_chart = PerformanceChart("Antwortzeiten")
         layout.addWidget(self.perf_chart)
         
-        # Slow Queries Tabelle
+        # Slow queries table
         slow_group = QGroupBox("🐢 Langsame Operationen (> 500ms)")
         slow_group.setStyleSheet("""
             QGroupBox {
-                background: #1e2530;
-                border-radius: 12px;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
                 padding: 16px;
                 margin-top: 12px;
-                font-weight: bold;
-                color: white;
+                font-weight: 600;
+                color: #212121;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -585,13 +600,14 @@ class TelemetryDashboard(QWidget):
             QTableWidget {
                 background: transparent;
                 border: none;
-                color: white;
+                color: #212121;
             }
             QHeaderView::section {
-                background: #374151;
-                color: white;
+                background: #fafafa;
+                color: #424242;
                 padding: 8px;
                 border: none;
+                border-bottom: 1px solid #e0e0e0;
             }
         """)
         slow_layout.addWidget(self.slow_table)
@@ -601,30 +617,30 @@ class TelemetryDashboard(QWidget):
         return widget
     
     def _create_errors_tab(self) -> QWidget:
-        """Erstellt die Fehler-Tab"""
+        """Create errors tab"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(24)
+        layout.setSpacing(20)
         
-        # Error-Statistiken
+        # Error statistics
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(16)
         
-        self.total_errors_card = MetricCard("Fehler gesamt", "0", "", "🐛", "#ef4444")
+        self.total_errors_card = MetricCard("Fehler gesamt", "0", "", "🐛", "#C62828")
         stats_layout.addWidget(self.total_errors_card)
         
-        self.unresolved_errors_card = MetricCard("Ungelöst", "0", "", "⚠️", "#f59e0b")
+        self.unresolved_errors_card = MetricCard("Ungelöst", "0", "", "⚠️", "#F57C00")
         stats_layout.addWidget(self.unresolved_errors_card)
         
-        self.critical_errors_card = MetricCard("Kritisch", "0", "", "🔴", "#dc2626")
+        self.critical_errors_card = MetricCard("Kritisch", "0", "", "🔴", "#B71C1C")
         stats_layout.addWidget(self.critical_errors_card)
         
-        self.error_rate_card = MetricCard("Fehlerrate", "0%", "", "📉", "#6366f1")
+        self.error_rate_card = MetricCard("Fehlerrate", "0%", "", "📉", "#7B1FA2")
         stats_layout.addWidget(self.error_rate_card)
         
         layout.addLayout(stats_layout)
         
-        # Error-Liste
+        # Error list
         self.error_list = ErrorListWidget()
         self.error_list.refresh_btn.clicked.connect(self.load_errors)
         layout.addWidget(self.error_list)
@@ -632,21 +648,22 @@ class TelemetryDashboard(QWidget):
         return widget
     
     def _create_health_tab(self) -> QWidget:
-        """Erstellt die System-Health-Tab"""
+        """Create health tab"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(24)
+        layout.setSpacing(20)
         
-        # System-Status
+        # System status
         status_group = QGroupBox("System-Status")
         status_group.setStyleSheet("""
             QGroupBox {
-                background: #1e2530;
-                border-radius: 12px;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
                 padding: 20px;
                 margin-top: 12px;
-                font-weight: bold;
-                color: white;
+                font-weight: 600;
+                color: #212121;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -655,9 +672,9 @@ class TelemetryDashboard(QWidget):
             }
         """)
         status_layout = QVBoxLayout(status_group)
-        status_layout.setSpacing(12)
+        status_layout.setSpacing(8)
         
-        # Health-Indikatoren
+        # Health indicators
         self.cpu_health = HealthIndicator("CPU")
         status_layout.addWidget(self.cpu_health)
         
@@ -672,20 +689,20 @@ class TelemetryDashboard(QWidget):
         
         layout.addWidget(status_group)
         
-        # Resource-Nutzung
+        # Resource usage
         resources_layout = QHBoxLayout()
         resources_layout.setSpacing(16)
         
-        self.cpu_card = MetricCard("CPU-Auslastung", "0%", "", "🖥️", "#3b82f6")
+        self.cpu_card = MetricCard("CPU-Auslastung", "0%", "", "🖥️", "#1565C0")
         resources_layout.addWidget(self.cpu_card)
         
-        self.memory_card = MetricCard("RAM-Nutzung", "0%", "", "💾", "#10b981")
+        self.memory_card = MetricCard("RAM-Nutzung", "0%", "", "💾", "#2E7D32")
         resources_layout.addWidget(self.memory_card)
         
-        self.disk_card = MetricCard("Speicher", "0%", "", "💿", "#f59e0b")
+        self.disk_card = MetricCard("Speicher", "0%", "", "💿", "#F57C00")
         resources_layout.addWidget(self.disk_card)
         
-        self.uptime_card = MetricCard("Uptime", "0h", "", "⏰", "#6366f1")
+        self.uptime_card = MetricCard("Uptime", "0h", "", "⏰", "#7B1FA2")
         resources_layout.addWidget(self.uptime_card)
         
         layout.addLayout(resources_layout)
@@ -695,39 +712,40 @@ class TelemetryDashboard(QWidget):
         return widget
     
     def _create_activity_tab(self) -> QWidget:
-        """Erstellt die Aktivität-Tab"""
+        """Create activity tab"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(24)
+        layout.setSpacing(20)
         
-        # Aktivitäts-Metriken
+        # Activity metrics
         metrics_layout = QHBoxLayout()
         metrics_layout.setSpacing(16)
         
-        self.active_users_card = MetricCard("Aktive Nutzer", "0", "Heute", "👥", "#3b82f6")
+        self.active_users_card = MetricCard("Aktive Nutzer", "0", "Heute", "👥", "#1565C0")
         metrics_layout.addWidget(self.active_users_card)
         
-        self.page_views_card = MetricCard("Seitenaufrufe", "0", "Heute", "📄", "#10b981")
+        self.page_views_card = MetricCard("Seitenaufrufe", "0", "Heute", "📄", "#2E7D32")
         metrics_layout.addWidget(self.page_views_card)
         
-        self.actions_card = MetricCard("Aktionen", "0", "Heute", "🖱️", "#f59e0b")
+        self.actions_card = MetricCard("Aktionen", "0", "Heute", "🖱️", "#F57C00")
         metrics_layout.addWidget(self.actions_card)
         
-        self.avg_session_card = MetricCard("Ø Session-Dauer", "0 min", "", "⏱️", "#6366f1")
+        self.avg_session_card = MetricCard("Ø Session-Dauer", "0 min", "", "⏱️", "#7B1FA2")
         metrics_layout.addWidget(self.avg_session_card)
         
         layout.addLayout(metrics_layout)
         
-        # Aktivitäts-Tabelle
+        # Activity table
         activity_group = QGroupBox("📋 Letzte Aktivitäten")
         activity_group.setStyleSheet("""
             QGroupBox {
-                background: #1e2530;
-                border-radius: 12px;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
                 padding: 16px;
                 margin-top: 12px;
-                font-weight: bold;
-                color: white;
+                font-weight: 600;
+                color: #212121;
             }
         """)
         activity_layout = QVBoxLayout(activity_group)
@@ -740,13 +758,14 @@ class TelemetryDashboard(QWidget):
             QTableWidget {
                 background: transparent;
                 border: none;
-                color: white;
+                color: #212121;
             }
             QHeaderView::section {
-                background: #374151;
-                color: white;
+                background: #fafafa;
+                color: #424242;
                 padding: 8px;
                 border: none;
+                border-bottom: 1px solid #e0e0e0;
             }
         """)
         activity_layout.addWidget(self.activity_table)
@@ -756,39 +775,45 @@ class TelemetryDashboard(QWidget):
         return widget
     
     def _create_audit_tab(self) -> QWidget:
-        """Erstellt die Audit-Log-Tab"""
+        """Create audit log tab"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(24)
+        layout.setSpacing(20)
         
         # Filter
         filter_layout = QHBoxLayout()
         
-        filter_layout.addWidget(QLabel("Aktion:"))
+        action_label = QLabel("Aktion:")
+        action_label.setStyleSheet("color: #424242;")
+        filter_layout.addWidget(action_label)
+        
         self.action_filter = QComboBox()
         self.action_filter.addItems(["Alle", "create", "update", "delete", "login", "logout"])
         self.action_filter.setStyleSheet("""
             QComboBox {
-                background: #374151;
-                color: white;
+                background: white;
+                color: #212121;
                 padding: 8px;
-                border-radius: 6px;
-                border: none;
+                border-radius: 4px;
+                border: 1px solid #e0e0e0;
                 min-width: 100px;
             }
         """)
         filter_layout.addWidget(self.action_filter)
         
-        filter_layout.addWidget(QLabel("Resource:"))
+        resource_label = QLabel("Resource:")
+        resource_label.setStyleSheet("color: #424242;")
+        filter_layout.addWidget(resource_label)
+        
         self.resource_filter = QComboBox()
         self.resource_filter.addItems(["Alle", "customer", "project", "invoice", "material", "user"])
         self.resource_filter.setStyleSheet("""
             QComboBox {
-                background: #374151;
-                color: white;
+                background: white;
+                color: #212121;
                 padding: 8px;
-                border-radius: 6px;
-                border: none;
+                border-radius: 4px;
+                border: 1px solid #e0e0e0;
                 min-width: 100px;
             }
         """)
@@ -796,14 +821,17 @@ class TelemetryDashboard(QWidget):
         
         filter_layout.addStretch()
         
-        search_btn = QPushButton("🔍 Filtern")
+        search_btn = QPushButton("Filtern")
         search_btn.setStyleSheet("""
             QPushButton {
-                background: #3b82f6;
+                background: #1565C0;
                 color: white;
                 border: none;
                 padding: 8px 16px;
-                border-radius: 6px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background: #1976D2;
             }
         """)
         search_btn.clicked.connect(self.load_audit_logs)
@@ -811,7 +839,7 @@ class TelemetryDashboard(QWidget):
         
         layout.addLayout(filter_layout)
         
-        # Audit-Tabelle
+        # Audit table
         self.audit_table = QTableWidget()
         self.audit_table.setColumnCount(7)
         self.audit_table.setHorizontalHeaderLabels([
@@ -820,16 +848,17 @@ class TelemetryDashboard(QWidget):
         self.audit_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         self.audit_table.setStyleSheet("""
             QTableWidget {
-                background: #1e2530;
-                border: none;
-                color: white;
-                border-radius: 12px;
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                color: #212121;
             }
             QHeaderView::section {
-                background: #374151;
-                color: white;
+                background: #fafafa;
+                color: #424242;
                 padding: 10px;
                 border: none;
+                border-bottom: 1px solid #e0e0e0;
             }
             QTableWidget::item {
                 padding: 8px;

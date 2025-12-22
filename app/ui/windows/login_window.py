@@ -1,5 +1,5 @@
 """
-Login Window - Modern Salesforce-inspired Design
+Login Window - Professional Material Design 3
 """
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
@@ -9,11 +9,12 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 
-from app.ui.styles import COLORS
+from app.ui.material_theme import MATERIAL_COLORS, CORNER_RADIUS
+from app.ui.material_components import MaterialButton, MaterialTextField, MaterialCard
 
 
 class LoginWindow(QDialog):
-    """Modern login dialog window"""
+    """Professional Material Design login dialog"""
     
     def __init__(self, auth_service):
         super().__init__()
@@ -25,56 +26,55 @@ class LoginWindow(QDialog):
     
     def setup_ui(self):
         self.setWindowTitle("HolzbauERP - Anmeldung")
-        self.setFixedSize(460, 600)
+        self.setFixedSize(440, 580)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         
-        # Main background gradient
-        self.setStyleSheet(f"""
-            QDialog {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {COLORS['secondary']}, stop:1 {COLORS['primary_dark']});
-            }}
-            QLabel {{
+        # Clean professional background
+        self.setStyleSheet("""
+            QDialog {
+                background: #f5f5f5;
+            }
+            QLabel {
                 background: transparent;
-            }}
+            }
         """)
         
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(32, 32, 32, 32)
         main_layout.setSpacing(0)
         
-        # Card container
+        # Card container - clean white card
         card = QFrame()
         card.setObjectName("loginCard")
         card.setStyleSheet("""
             QFrame#loginCard {
                 background: white;
-                border-radius: 16px;
+                border-radius: 12px;
+                border: 1px solid #e0e0e0;
             }
         """)
         
-        # Shadow effect
+        # Subtle shadow
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(40)
+        shadow.setBlurRadius(20)
         shadow.setXOffset(0)
-        shadow.setYOffset(8)
-        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 25))
         card.setGraphicsEffect(shadow)
         
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(0)
         card_layout.setContentsMargins(0, 0, 0, 0)
         
-        # ===== HEADER =====
+        # ===== HEADER - Professional with company branding =====
         header = QFrame()
         header.setFixedHeight(100)
-        header.setStyleSheet(f"""
-            QFrame {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 {COLORS['secondary']}, stop:1 {COLORS['primary']});
-                border-top-left-radius: 16px;
-                border-top-right-radius: 16px;
-            }}
+        header.setStyleSheet("""
+            QFrame {
+                background: #1565C0;
+                border-top-left-radius: 11px;
+                border-top-right-radius: 11px;
+            }
         """)
         
         header_layout = QVBoxLayout(header)
@@ -82,16 +82,18 @@ class LoginWindow(QDialog):
         header_layout.setSpacing(4)
         header_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        logo = QLabel("🏠")
-        logo.setFont(QFont("Segoe UI Emoji", 32))
+        # Company icon
+        logo = QLabel("🏗️")
+        logo.setFont(QFont("Segoe UI Emoji", 28))
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo.setStyleSheet("color: white;")
         header_layout.addWidget(logo)
         
+        # Title
         title = QLabel("HolzbauERP")
-        title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 20, QFont.Weight.DemiBold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: white;")
+        title.setStyleSheet("color: white; letter-spacing: 0.5px;")
         header_layout.addWidget(title)
         
         card_layout.addWidget(header)
@@ -99,23 +101,23 @@ class LoginWindow(QDialog):
         # ===== FORM CONTENT =====
         form_container = QWidget()
         form_layout = QVBoxLayout(form_container)
-        form_layout.setContentsMargins(32, 24, 32, 24)
+        form_layout.setContentsMargins(32, 28, 32, 28)
         form_layout.setSpacing(0)
         
         # Welcome text
-        welcome = QLabel("Willkommen zurück")
-        welcome.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        welcome.setStyleSheet(f"color: {COLORS['text_primary']}; margin-bottom: 4px;")
+        welcome = QLabel("Anmeldung")
+        welcome.setFont(QFont("Segoe UI", 18, QFont.Weight.DemiBold))
+        welcome.setStyleSheet("color: #212121; margin-bottom: 4px;")
         form_layout.addWidget(welcome)
         
-        subtitle = QLabel("Melden Sie sich an, um fortzufahren")
-        subtitle.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 13px; margin-bottom: 20px;")
+        subtitle = QLabel("Bitte melden Sie sich mit Ihren Zugangsdaten an")
+        subtitle.setStyleSheet("color: #757575; font-size: 13px; margin-bottom: 24px;")
         form_layout.addWidget(subtitle)
         
         # ===== EMAIL FIELD =====
-        email_label = QLabel("E-MAIL-ADRESSE")
-        email_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        email_label.setStyleSheet(f"color: {COLORS['text_secondary']}; letter-spacing: 0.5px; margin-bottom: 6px; margin-top: 8px;")
+        email_label = QLabel("E-Mail-Adresse")
+        email_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
+        email_label.setStyleSheet("color: #424242; margin-bottom: 6px;")
         form_layout.addWidget(email_label)
         
         self.email_input = QLineEdit()
@@ -125,80 +127,77 @@ class LoginWindow(QDialog):
         self.email_input.setStyleSheet(self._get_input_style())
         form_layout.addWidget(self.email_input)
         
-        # Spacer
         form_layout.addSpacing(16)
         
         # ===== PASSWORD FIELD =====
-        password_label = QLabel("PASSWORT")
-        password_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        password_label.setStyleSheet(f"color: {COLORS['text_secondary']}; letter-spacing: 0.5px; margin-bottom: 6px;")
+        password_label = QLabel("Passwort")
+        password_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
+        password_label.setStyleSheet("color: #424242; margin-bottom: 6px;")
         form_layout.addWidget(password_label)
         
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("••••••••")
+        self.password_input.setPlaceholderText("Passwort eingeben")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_input.setText("admin123")
         self.password_input.setMinimumHeight(44)
         self.password_input.setStyleSheet(self._get_input_style())
         form_layout.addWidget(self.password_input)
         
-        # Spacer
         form_layout.addSpacing(12)
         
         # ===== REMEMBER ME =====
         self.remember_check = QCheckBox("Angemeldet bleiben")
-        self.remember_check.setStyleSheet(f"""
-            QCheckBox {{
-                color: {COLORS['text_secondary']};
+        self.remember_check.setStyleSheet("""
+            QCheckBox {
+                color: #616161;
                 font-size: 13px;
                 spacing: 8px;
-            }}
-            QCheckBox::indicator {{
+            }
+            QCheckBox::indicator {
                 width: 18px;
                 height: 18px;
-                border: 2px solid {COLORS['gray_200']};
-                border-radius: 4px;
+                border: 2px solid #9e9e9e;
+                border-radius: 3px;
                 background: white;
-            }}
-            QCheckBox::indicator:checked {{
-                background: {COLORS['primary']};
-                border-color: {COLORS['primary']};
-            }}
+            }
+            QCheckBox::indicator:hover {
+                border-color: #1565C0;
+            }
+            QCheckBox::indicator:checked {
+                background: #1565C0;
+                border-color: #1565C0;
+            }
         """)
         form_layout.addWidget(self.remember_check)
         
-        # Spacer
-        form_layout.addSpacing(20)
+        form_layout.addSpacing(24)
         
         # ===== LOGIN BUTTON =====
         self.login_btn = QPushButton("Anmelden")
-        self.login_btn.setMinimumHeight(46)
+        self.login_btn.setMinimumHeight(48)
         self.login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.login_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self.login_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {COLORS['primary']}, stop:1 {COLORS['primary_dark']});
+        self.login_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.DemiBold))
+        self.login_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1565C0;
                 color: white;
                 border: none;
-                border-radius: 8px;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {COLORS['primary_light']}, stop:1 {COLORS['primary']});
-            }}
-            QPushButton:pressed {{
-                background: {COLORS['primary_dark']};
-            }}
-            QPushButton:disabled {{
-                background: {COLORS['gray_300']};
-            }}
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+            QPushButton:disabled {
+                background-color: #BDBDBD;
+            }
         """)
         self.login_btn.clicked.connect(self.handle_login)
         form_layout.addWidget(self.login_btn)
         
-        # Spacer
-        form_layout.addSpacing(20)
+        form_layout.addSpacing(16)
         
         # ===== DIVIDER =====
         divider_widget = QWidget()
@@ -208,50 +207,52 @@ class LoginWindow(QDialog):
         
         line1 = QFrame()
         line1.setFixedHeight(1)
-        line1.setStyleSheet(f"background: {COLORS['gray_100']};")
+        line1.setStyleSheet("background: #e0e0e0;")
         line1.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         divider_layout.addWidget(line1)
         
         or_label = QLabel("oder")
-        or_label.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 12px;")
+        or_label.setStyleSheet("color: #9e9e9e; font-size: 12px;")
         divider_layout.addWidget(or_label)
         
         line2 = QFrame()
         line2.setFixedHeight(1)
-        line2.setStyleSheet(f"background: {COLORS['gray_100']};")
+        line2.setStyleSheet("background: #e0e0e0;")
         line2.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         divider_layout.addWidget(line2)
         
         form_layout.addWidget(divider_widget)
         
-        # Spacer
-        form_layout.addSpacing(20)
+        form_layout.addSpacing(16)
         
         # ===== REGISTER BUTTON =====
         register_btn = QPushButton("Neues Konto erstellen")
-        register_btn.setMinimumHeight(46)
+        register_btn.setMinimumHeight(48)
         register_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        register_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        register_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: white;
-                color: {COLORS['primary']};
-                border: 2px solid {COLORS['primary']};
-                border-radius: 8px;
-            }}
-            QPushButton:hover {{
-                background: {COLORS['gray_50']};
-            }}
+        register_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Medium))
+        register_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #1565C0;
+                border: 1px solid #1565C0;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: rgba(21, 101, 192, 0.08);
+            }
+            QPushButton:pressed {
+                background-color: rgba(21, 101, 192, 0.12);
+            }
         """)
         register_btn.clicked.connect(self.show_register)
         form_layout.addWidget(register_btn)
         
-        # Version at bottom
+        # Version
         form_layout.addStretch()
         
         version = QLabel("Version 1.0.0")
         version.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        version.setStyleSheet(f"color: {COLORS['gray_300']}; font-size: 11px; margin-top: 16px;")
+        version.setStyleSheet("color: #bdbdbd; font-size: 11px; margin-top: 12px;")
         form_layout.addWidget(version)
         
         card_layout.addWidget(form_container)
@@ -265,22 +266,26 @@ class LoginWindow(QDialog):
         self.email_input.setFocus()
     
     def _get_input_style(self):
-        return f"""
-            QLineEdit {{
-                padding: 10px 14px;
-                border: 2px solid {COLORS['gray_100']};
-                border-radius: 8px;
+        """Professional input field style"""
+        return """
+            QLineEdit {
+                background-color: #fafafa;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 12px;
                 font-size: 14px;
-                background: {COLORS['gray_50']};
-                color: {COLORS['text_primary']};
-            }}
-            QLineEdit:focus {{
-                border-color: {COLORS['primary']};
-                background: white;
-            }}
-            QLineEdit:hover:!focus {{
-                border-color: {COLORS['gray_200']};
-            }}
+                color: #212121;
+            }
+            QLineEdit:focus {
+                border: 2px solid #1565C0;
+                background-color: white;
+            }
+            QLineEdit:hover:!focus {
+                border-color: #bdbdbd;
+            }
+            QLineEdit::placeholder {
+                color: #9e9e9e;
+            }
         """
     
     def handle_login(self):

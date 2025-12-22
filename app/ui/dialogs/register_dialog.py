@@ -1,5 +1,5 @@
 """
-Register Dialog - Modern Salesforce-inspired Design
+Register Dialog - Professional Design
 """
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
@@ -8,11 +8,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 
-from app.ui.styles import COLORS
-
 
 class RegisterDialog(QDialog):
-    """Modern registration dialog"""
+    """Professional registration dialog"""
     
     def __init__(self, auth_service, parent=None):
         super().__init__(parent)
@@ -22,17 +20,16 @@ class RegisterDialog(QDialog):
     
     def setup_ui(self):
         self.setWindowTitle("Registrierung - HolzbauERP")
-        self.setFixedSize(460, 580)
+        self.setFixedSize(440, 560)
         
-        # Dialog background
-        self.setStyleSheet(f"""
-            QDialog {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {COLORS['secondary']}, stop:1 {COLORS['primary_dark']});
-            }}
-            QLabel {{
+        # Clean background
+        self.setStyleSheet("""
+            QDialog {
+                background: #f5f5f5;
+            }
+            QLabel {
                 background: transparent;
-            }}
+            }
         """)
         
         main_layout = QVBoxLayout(self)
@@ -44,16 +41,17 @@ class RegisterDialog(QDialog):
         card.setStyleSheet("""
             QFrame#registerCard {
                 background: white;
-                border-radius: 16px;
+                border-radius: 12px;
+                border: 1px solid #e0e0e0;
             }
         """)
         
         # Shadow
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(40)
+        shadow.setBlurRadius(20)
         shadow.setXOffset(0)
-        shadow.setYOffset(8)
-        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 25))
         card.setGraphicsEffect(shadow)
         
         card_layout = QVBoxLayout(card)
@@ -62,20 +60,20 @@ class RegisterDialog(QDialog):
         
         # Header
         header_icon = QLabel("👤")
-        header_icon.setFont(QFont("Segoe UI Emoji", 28))
+        header_icon.setFont(QFont("Segoe UI Emoji", 24))
         header_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        header_icon.setStyleSheet(f"color: {COLORS['primary']};")
+        header_icon.setStyleSheet("color: #1565C0;")
         card_layout.addWidget(header_icon)
         
         title = QLabel("Neues Konto erstellen")
-        title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 18, QFont.Weight.DemiBold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(f"color: {COLORS['text_primary']}; margin-top: 8px;")
+        title.setStyleSheet("color: #212121; margin-top: 8px;")
         card_layout.addWidget(title)
         
         subtitle = QLabel("Erstellen Sie ein kostenloses Konto")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 13px; margin-bottom: 20px;")
+        subtitle.setStyleSheet("color: #757575; font-size: 13px; margin-bottom: 20px;")
         card_layout.addWidget(subtitle)
         
         # Form fields
@@ -100,8 +98,8 @@ class RegisterDialog(QDialog):
         first_layout.setContentsMargins(0, 0, 0, 0)
         first_layout.setSpacing(4)
         first_label = QLabel("VORNAME")
-        first_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        first_label.setStyleSheet(f"color: {COLORS['text_secondary']}; letter-spacing: 0.5px;")
+        first_label.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+        first_label.setStyleSheet("color: #757575; letter-spacing: 0.5px;")
         first_layout.addWidget(first_label)
         self.first_name_input = self._create_input("Max")
         first_layout.addWidget(self.first_name_input)
@@ -112,8 +110,8 @@ class RegisterDialog(QDialog):
         last_layout.setContentsMargins(0, 0, 0, 0)
         last_layout.setSpacing(4)
         last_label = QLabel("NACHNAME")
-        last_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        last_label.setStyleSheet(f"color: {COLORS['text_secondary']}; letter-spacing: 0.5px;")
+        last_label.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+        last_label.setStyleSheet("color: #757575; letter-spacing: 0.5px;")
         last_layout.addWidget(last_label)
         self.last_name_input = self._create_input("Mustermann")
         last_layout.addWidget(self.last_name_input)
@@ -136,19 +134,20 @@ class RegisterDialog(QDialog):
         register_btn = QPushButton("Konto erstellen")
         register_btn.setMinimumHeight(44)
         register_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        register_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        register_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2e844a, stop:1 #1c5a2f);
+        register_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.DemiBold))
+        register_btn.setStyleSheet("""
+            QPushButton {
+                background: #1565C0;
                 color: white;
                 border: none;
-                border-radius: 8px;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #45c65a, stop:1 #2e844a);
-            }}
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background: #1976D2;
+            }
+            QPushButton:pressed {
+                background: #0D47A1;
+            }
         """)
         register_btn.clicked.connect(self.register)
         card_layout.addWidget(register_btn)
@@ -160,15 +159,15 @@ class RegisterDialog(QDialog):
         cancel_btn.setMinimumHeight(44)
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.setFont(QFont("Segoe UI", 12))
-        cancel_btn.setStyleSheet(f"""
-            QPushButton {{
+        cancel_btn.setStyleSheet("""
+            QPushButton {
                 background: transparent;
-                color: {COLORS['text_secondary']};
+                color: #757575;
                 border: none;
-            }}
-            QPushButton:hover {{
-                color: {COLORS['primary']};
-            }}
+            }
+            QPushButton:hover {
+                color: #1565C0;
+            }
         """)
         cancel_btn.clicked.connect(self.reject)
         card_layout.addWidget(cancel_btn)
@@ -180,8 +179,8 @@ class RegisterDialog(QDialog):
     
     def _add_field_label(self, layout, text):
         label = QLabel(text)
-        label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        label.setStyleSheet(f"color: {COLORS['text_secondary']}; letter-spacing: 0.5px; margin-bottom: 4px;")
+        label.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+        label.setStyleSheet("color: #757575; letter-spacing: 0.5px; margin-bottom: 4px;")
         layout.addWidget(label)
     
     def _create_input(self, placeholder, password=False):
@@ -190,22 +189,22 @@ class RegisterDialog(QDialog):
         input_field.setMinimumHeight(40)
         if password:
             input_field.setEchoMode(QLineEdit.EchoMode.Password)
-        input_field.setStyleSheet(f"""
-            QLineEdit {{
+        input_field.setStyleSheet("""
+            QLineEdit {
                 padding: 8px 12px;
-                border: 2px solid {COLORS['gray_100']};
-                border-radius: 8px;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
                 font-size: 13px;
-                background: {COLORS['gray_50']};
-                color: {COLORS['text_primary']};
-            }}
-            QLineEdit:focus {{
-                border-color: {COLORS['primary']};
+                background: #fafafa;
+                color: #212121;
+            }
+            QLineEdit:focus {
+                border: 2px solid #1565C0;
                 background: white;
-            }}
-            QLineEdit:hover:!focus {{
-                border-color: {COLORS['gray_200']};
-            }}
+            }
+            QLineEdit:hover:!focus {
+                border-color: #bdbdbd;
+            }
         """)
         return input_field
     

@@ -1,5 +1,5 @@
 """
-Main Application Window - Modern Salesforce-inspired Design
+Main Application Window - Material Design 3 with Responsive Support
 """
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
@@ -7,10 +7,11 @@ from PyQt6.QtWidgets import (
     QApplication, QLineEdit, QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QIcon, QAction, QColor
+from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QResizeEvent
 
 from app.ui.widgets.sidebar import Sidebar
-from app.ui.styles import COLORS, GLOBAL_STYLE, get_button_style
+from app.ui.material_theme import MATERIAL_COLORS, CORNER_RADIUS, get_material_stylesheet
+from app.ui.responsive import ResponsiveManager, Breakpoint
 
 
 class PageLoader(QThread):
@@ -64,7 +65,7 @@ class PageLoader(QThread):
 
 
 class MainWindow(QMainWindow):
-    """Main application window with lazy loading optimization"""
+    """Main application window with lazy loading and responsive design"""
     
     def __init__(self, db_service, user):
         super().__init__()
@@ -73,11 +74,45 @@ class MainWindow(QMainWindow):
         self.pages = {}
         self._loading_pages = set()
         self._page_loaders = []
+        
+        # Initialize responsive manager
+        self._responsive_manager = ResponsiveManager.instance()
+        self._responsive_manager.breakpoint_changed.connect(self._on_breakpoint_changed)
+        
         self.setup_ui()
         self.setup_menu()
         
         # Preload dashboard immediately, others on-demand
         QTimer.singleShot(100, self._preload_dashboard)
+    
+    def _on_breakpoint_changed(self, breakpoint: Breakpoint):
+        """Handle responsive breakpoint changes"""
+        # Auto-collapse sidebar on smaller screens
+        if breakpoint.value < Breakpoint.LG.value:
+            self.sidebar.set_collapsed(True)
+        else:
+            self.sidebar.set_collapsed(False)
+        
+        # Update header visibility
+        self._update_header_for_breakpoint(breakpoint)
+    
+    def _update_header_for_breakpoint(self, breakpoint: Breakpoint):
+        """Update header elements based on screen size"""
+        is_small = breakpoint.value < Breakpoint.MD.value
+        is_medium = breakpoint.value < Breakpoint.LG.value
+        
+        # Hide search on very small screens
+        if hasattr(self, 'search_container'):
+            self.search_container.setVisible(not is_small)
+        
+        # Compact user info on medium screens
+        if hasattr(self, 'user_label'):
+            self.user_label.setVisible(not is_medium)
+    
+    def resizeEvent(self, event: QResizeEvent):
+        """Handle window resize"""
+        super().resizeEvent(event)
+        self._responsive_manager.update_size(event.size().width(), event.size().height())
     
     def _preload_dashboard(self):
         """Preload dashboard widget"""
@@ -87,8 +122,7 @@ class MainWindow(QMainWindow):
         self.navigate_to("dashboard")
     
     def setup_ui(self):
-        # Apply global stylesheet
-        self.setStyleSheet(GLOBAL_STYLE)
+        # Apply Material stylesheet
         
         # Safely get company name from UserData
         company_name = self.user.company_name or 'HolzbauERP'
@@ -110,12 +144,12 @@ class MainWindow(QMainWindow):
         self.sidebar.navigation_clicked.connect(self.navigate_to)
         main_layout.addWidget(self.sidebar)
         
-        # Content area
+        # Content area with Material Design
         content_frame = QFrame()
         content_frame.setObjectName("contentFrame")
         content_frame.setStyleSheet(f"""
             #contentFrame {{
-                background-color: {COLORS['bg_primary']};
+                background-color: {MATERIAL_COLORS['background']};
             }}
         """)
         content_layout = QVBoxLayout(content_frame)
@@ -129,9 +163,9 @@ class MainWindow(QMainWindow):
         # Stacked widget for pages (lazy loaded)
         self.stack = QStackedWidget()
         
-        # Modern loading placeholder
+        # Material Design loading placeholder
         self.loading_widget = QWidget()
-        self.loading_widget.setStyleSheet(f"background: {COLORS['bg_primary']};")
+        self.loading_widget.setStyleSheet(f"background: {MATERIAL_COLORS['background']};")
         loading_layout = QVBoxLayout(self.loading_widget)
         loading_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
@@ -139,21 +173,21 @@ class MainWindow(QMainWindow):
         loading_container.setFixedSize(200, 100)
         loading_container.setStyleSheet(f"""
             QFrame {{
-                background: white;
-                border-radius: 12px;
-                border: 1px solid {COLORS['gray_100']};
+                background: {MATERIAL_COLORS['surface']};
+                border-radius: {CORNER_RADIUS['medium']};
+                border: 1px solid {MATERIAL_COLORS['outline_variant']};
             }}
         """)
         loading_inner = QVBoxLayout(loading_container)
         
         loading_label = QLabel("⏳")
-        loading_label.setFont(QFont("Segoe UI", 24))
+        loading_label.setFont(QFont("Segoe UI Emoji", 24))
         loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         loading_inner.addWidget(loading_label)
         
         loading_text = QLabel("Lädt...")
         loading_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        loading_text.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 14px;")
+        loading_text.setStyleSheet(f"color: {MATERIAL_COLORS['on_surface_variant']}; font-size: 14px; font-family: 'Roboto';")
         loading_inner.addWidget(loading_text)
         
         loading_layout.addWidget(loading_container)
@@ -163,62 +197,52 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(content_frame, 1)
     
     def _create_header(self) -> QFrame:
-        """Create modern top header bar with search and user info"""
+        """Create Material Design top header bar with responsive elements"""
         header = QFrame()
         header.setObjectName("header")
-        header.setFixedHeight(70)
+        header.setFixedHeight(64)
         header.setStyleSheet(f"""
             QFrame#header {{
-                background-color: white;
-                border-bottom: 1px solid {COLORS['gray_100']};
+                background-color: {MATERIAL_COLORS['surface']};
+                border-bottom: 1px solid {MATERIAL_COLORS['outline_variant']};
             }}
         """)
-        
-        # Add subtle shadow
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(10)
-        shadow.setXOffset(0)
-        shadow.setYOffset(2)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        header.setGraphicsEffect(shadow)
         
         layout = QHBoxLayout(header)
         layout.setContentsMargins(24, 0, 24, 0)
         layout.setSpacing(16)
         
-        # Page title with icon
+        # Page title with Material Typography
         title_container = QHBoxLayout()
-        title_container.setSpacing(12)
+        title_container.setSpacing(10)
         
         self.page_icon = QLabel("📊")
-        self.page_icon.setFont(QFont("Segoe UI", 20))
+        self.page_icon.setFont(QFont("Segoe UI Emoji", 20))
         title_container.addWidget(self.page_icon)
         
         self.page_title = QLabel("Dashboard")
-        self.page_title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
-        self.page_title.setStyleSheet(f"color: {COLORS['text_primary']};")
+        self.page_title.setFont(QFont("Roboto", 20, QFont.Weight.Normal))
+        self.page_title.setStyleSheet(f"color: {MATERIAL_COLORS['on_surface']};")
         title_container.addWidget(self.page_title)
         
         layout.addLayout(title_container)
         
-        # Global search bar
-        search_container = QFrame()
-        search_container.setFixedWidth(400)
-        search_container.setStyleSheet(f"""
+        # Material Design Search Bar (responsive)
+        self.search_container = QFrame()
+        self.search_container.setMinimumWidth(200)
+        self.search_container.setMaximumWidth(400)
+        self.search_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.search_container.setStyleSheet(f"""
             QFrame {{
-                background: {COLORS['gray_50']};
-                border: 1px solid {COLORS['gray_100']};
-                border-radius: 8px;
-            }}
-            QFrame:focus-within {{
-                border-color: {COLORS['primary']};
-                background: white;
+                background: {MATERIAL_COLORS['surface_container_highest']};
+                border: none;
+                border-radius: 24px;
             }}
         """)
         
-        search_layout = QHBoxLayout(search_container)
-        search_layout.setContentsMargins(12, 0, 12, 0)
-        search_layout.setSpacing(8)
+        search_layout = QHBoxLayout(self.search_container)
+        search_layout.setContentsMargins(16, 0, 16, 0)
+        search_layout.setSpacing(10)
         
         search_icon = QLabel("🔍")
         search_icon.setStyleSheet("background: transparent;")
@@ -230,20 +254,21 @@ class MainWindow(QMainWindow):
             QLineEdit {{
                 border: none;
                 background: transparent;
-                padding: 10px 0;
-                font-size: 14px;
-                color: {COLORS['text_primary']};
+                padding: 12px 0;
+                font-size: 16px;
+                font-family: 'Roboto';
+                color: {MATERIAL_COLORS['on_surface']};
             }}
             QLineEdit::placeholder {{
-                color: {COLORS['gray_400']};
+                color: {MATERIAL_COLORS['on_surface_variant']};
             }}
         """)
         search_layout.addWidget(self.global_search)
         
-        layout.addWidget(search_container)
+        layout.addWidget(self.search_container)
         layout.addStretch()
         
-        # Notifications button
+        # Material Icon Buttons
         notif_btn = QPushButton("🔔")
         notif_btn.setFixedSize(40, 40)
         notif_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -251,80 +276,82 @@ class MainWindow(QMainWindow):
             QPushButton {{
                 background: transparent;
                 border: none;
-                border-radius: 8px;
+                border-radius: 20px;
                 font-size: 18px;
             }}
             QPushButton:hover {{
-                background: {COLORS['gray_50']};
+                background: {MATERIAL_COLORS['surface_container_highest']};
             }}
         """)
         layout.addWidget(notif_btn)
         
-        # User info dropdown
+        # User info with Material Design (responsive)
         user_container = QFrame()
         user_container.setStyleSheet(f"""
             QFrame {{
-                background: {COLORS['gray_50']};
-                border-radius: 8px;
-                padding: 4px;
+                background: {MATERIAL_COLORS['surface_container_low']};
+                border-radius: 22px;
+                padding: 2px;
             }}
             QFrame:hover {{
-                background: {COLORS['gray_100']};
+                background: {MATERIAL_COLORS['surface_container_highest']};
             }}
         """)
         user_container.setCursor(Qt.CursorShape.PointingHandCursor)
         
         user_layout = QHBoxLayout(user_container)
-        user_layout.setContentsMargins(8, 6, 12, 6)
+        user_layout.setContentsMargins(6, 4, 12, 4)
         user_layout.setSpacing(10)
         
         # User avatar
         avatar = QLabel("👤")
-        avatar.setFont(QFont("Segoe UI", 16))
+        avatar.setFont(QFont("Segoe UI Emoji", 12))
         avatar.setFixedSize(32, 32)
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         avatar.setStyleSheet(f"""
-            background: {COLORS['primary']};
+            background: {MATERIAL_COLORS['primary']};
             border-radius: 16px;
             color: white;
         """)
         user_layout.addWidget(avatar)
         
-        # User name
+        # User name (hidden on small screens)
         user_name = f"{self.user.first_name or ''} {self.user.last_name or self.user.username}".strip()
-        user_label = QLabel(user_name)
-        user_label.setStyleSheet(f"""
-            color: {COLORS['text_primary']};
-            font-weight: 600;
+        self.user_label = QLabel(user_name)
+        self.user_label.setStyleSheet(f"""
+            color: {MATERIAL_COLORS['on_surface']};
+            font-weight: 500;
             font-size: 13px;
+            font-family: 'Roboto';
             background: transparent;
         """)
-        user_layout.addWidget(user_label)
+        user_layout.addWidget(self.user_label)
         
         # Dropdown arrow
         arrow = QLabel("▼")
-        arrow.setStyleSheet(f"color: {COLORS['gray_400']}; font-size: 8px; background: transparent;")
+        arrow.setStyleSheet(f"color: {MATERIAL_COLORS['on_surface_variant']}; font-size: 8px; background: transparent;")
         user_layout.addWidget(arrow)
         
         layout.addWidget(user_container)
         
-        # Logout button
+        # Logout button with Material Design
         logout_btn = QPushButton("Abmelden")
         logout_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         logout_btn.setStyleSheet(f"""
             QPushButton {{
-                padding: 8px 16px;
+                padding: 10px 20px;
                 background: transparent;
-                color: {COLORS['text_secondary']};
-                border: 1px solid {COLORS['gray_200']};
-                border-radius: 6px;
+                color: {MATERIAL_COLORS['on_surface_variant']};
+                border: 1px solid {MATERIAL_COLORS['outline']};
+                border-radius: 20px;
                 font-weight: 500;
-                font-size: 13px;
+                font-size: 14px;
+                font-family: 'Roboto';
             }}
             QPushButton:hover {{
-                background: {COLORS['gray_50']};
-                border-color: {COLORS['gray_300']};
-                color: {COLORS['text_primary']};
+                background: {MATERIAL_COLORS['surface_container_highest']};
+                border-color: {MATERIAL_COLORS['outline']};
+                color: {MATERIAL_COLORS['on_surface']};
             }}
         """)
         logout_btn.clicked.connect(self.handle_logout)
