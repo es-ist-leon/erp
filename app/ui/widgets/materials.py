@@ -226,6 +226,9 @@ class MaterialsWidget(QWidget):
     def refresh(self):
         session = self.db.get_session()
         try:
+            # Disable updates during data load for better performance
+            self.table.setUpdatesEnabled(False)
+            
             query = select(Material).where(
                 Material.is_deleted == False,
                 Material.is_active == True
@@ -291,6 +294,8 @@ class MaterialsWidget(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Fehler", f"Fehler beim Laden: {e}")
         finally:
+            # Re-enable updates
+            self.table.setUpdatesEnabled(True)
             session.close()
     
     def add_material(self):

@@ -198,9 +198,12 @@ class SuppliersWidget(QWidget):
         self._search_timer.start(300)
     
     def refresh(self):
-        """Load suppliers from database"""
+        """Load suppliers from database with optimized rendering"""
         session = self.db.get_session()
         try:
+            # Disable updates during data load for better performance
+            self.table.setUpdatesEnabled(False)
+            
             query = select(Supplier).where(
                 Supplier.is_deleted == False,
                 Supplier.is_active == True
@@ -239,6 +242,8 @@ class SuppliersWidget(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Fehler", f"Fehler beim Laden: {e}")
         finally:
+            # Re-enable updates
+            self.table.setUpdatesEnabled(True)
             session.close()
     
     def add_supplier(self):

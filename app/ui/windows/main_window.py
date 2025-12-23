@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QApplication, QLineEdit, QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QResizeEvent
+from PyQt6.QtGui import QFont, QIcon, QAction, QColor, QResizeEvent, QKeySequence, QShortcut
 
 from app.ui.widgets.sidebar import Sidebar
 from app.ui.material_theme import MATERIAL_COLORS, CORNER_RADIUS, get_material_stylesheet
@@ -81,9 +81,37 @@ class MainWindow(QMainWindow):
         
         self.setup_ui()
         self.setup_menu()
+        self._setup_shortcuts()
         
         # Preload dashboard immediately, others on-demand
         QTimer.singleShot(100, self._preload_dashboard)
+        
+        # Preload frequently used pages in background after dashboard loads
+        QTimer.singleShot(2000, self._preload_common_pages)
+    
+    def _setup_shortcuts(self):
+        """Setup keyboard shortcuts"""
+        # Global search shortcut (Ctrl+K)
+        search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        search_shortcut.activated.connect(self._open_global_search)
+        
+        # Alternative search shortcut (Ctrl+F)
+        search_shortcut2 = QShortcut(QKeySequence("Ctrl+F"), self)
+        search_shortcut2.activated.connect(self._open_global_search)
+    
+    def _open_global_search(self):
+        """Open global search dialog"""
+        from app.ui.dialogs.search_dialog import GlobalSearchDialog
+        dialog = GlobalSearchDialog(self.db_service, self)
+        dialog.result_selected.connect(self._handle_search_result)
+        dialog.exec()
+    
+    def _preload_common_pages(self):
+        """Preload commonly used pages in background for faster navigation"""
+        common_pages = ["customers", "projects"]
+        for page in common_pages:
+            if page not in self.pages and page not in self._loading_pages:
+                QTimer.singleShot(100, lambda p=page: self._load_page_sync(p))
     
     def _on_breakpoint_changed(self, breakpoint: Breakpoint):
         """Handle responsive breakpoint changes"""
@@ -250,6 +278,8 @@ class MainWindow(QMainWindow):
         
         self.global_search = QLineEdit()
         self.global_search.setPlaceholderText("Suchen... (Strg+K)")
+        self.global_search.setReadOnly(True)
+        self.global_search.setCursor(Qt.CursorShape.PointingHandCursor)
         self.global_search.setStyleSheet(f"""
             QLineEdit {{
                 border: none;
@@ -263,6 +293,7 @@ class MainWindow(QMainWindow):
                 color: {MATERIAL_COLORS['on_surface_variant']};
             }}
         """)
+        self.global_search.mousePressEvent = lambda e: self._open_global_search()
         search_layout.addWidget(self.global_search)
         
         layout.addWidget(self.search_container)
@@ -524,6 +555,74 @@ class MainWindow(QMainWindow):
             "<p>Enterprise Resource Planning für Holzbaubetriebe</p>"
             "<p>© 2024 HolzbauERP</p>"
         )
+    
+    def _handle_search_result(self, entity_type: str, entity_id: str):
+        """Handle search result selection"""
+        # Navigation types
+        if entity_type == "navigate":
+            self.navigate_to(entity_id)
+            return
+        
+        # Entity types - navigate to page and optionally open editor
+        type_to_page = {
+            "customer": "customers",
+            "project": "projects",
+            "material": "materials",
+            "supplier": "suppliers",
+            "employee": "employees",
+            "invoice": "invoices",
+            "order": "orders",
+            "quote": "orders",
+        }
+        
+        page = type_to_page.get(entity_type)
+        if page:
+            self.navigate_to(page)
+            
+            # Open editor dialog for the entity
+            QTimer.singleShot(200, lambda: self._open_entity_editor(entity_type, entity_id))
+    
+    def _open_entity_editor(self, entity_type: str, entity_id: str):
+        """Open editor dialog for specific entity"""
+        try:
+            if entity_type == "customer":
+                from app.ui.dialogs.customer_dialog import CustomerDialog
+                dialog = CustomerDialog(self.db_service, customer_id=entity_id, user=self.user, parent=self)
+                if dialog.exec():
+                    self.pages.get("customers", None) and self.pages["customers"].refresh()
+            
+            elif entity_type == "project":
+                from app.ui.dialogs.project_dialog import ProjectDialog
+                dialog = ProjectDialog(self.db_service, project_id=entity_id, user=self.user, parent=self)
+                if dialog.exec():
+                    self.pages.get("projects", None) and self.pages["projects"].refresh()
+            
+            elif entity_type == "material":
+                from app.ui.dialogs.material_dialog import MaterialDialog
+                dialog = MaterialDialog(self.db_service, material_id=entity_id, user=self.user, parent=self)
+                if dialog.exec():
+                    self.pages.get("materials", None) and self.pages["materials"].refresh()
+            
+            elif entity_type == "supplier":
+                from app.ui.dialogs.supplier_dialog import SupplierDialog
+                dialog = SupplierDialog(self.db_service, supplier_id=entity_id, user=self.user, parent=self)
+                if dialog.exec():
+                    self.pages.get("suppliers", None) and self.pages["suppliers"].refresh()
+            
+            elif entity_type == "employee":
+                from app.ui.dialogs.employee_dialog import EmployeeDialog
+                dialog = EmployeeDialog(self.db_service, employee_id=entity_id, user=self.user, parent=self)
+                if dialog.exec():
+                    self.pages.get("employees", None) and self.pages["employees"].refresh()
+            
+            elif entity_type == "invoice":
+                from app.ui.dialogs.invoice_dialog import InvoiceDialog
+                dialog = InvoiceDialog(self.db_service, invoice_id=entity_id, user=self.user, parent=self)
+                if dialog.exec():
+                    self.pages.get("invoices", None) and self.pages["invoices"].refresh()
+                    
+        except Exception as e:
+            print(f"Error opening entity editor: {e}")
     
     def closeEvent(self, event):
         """Handle window close"""

@@ -56,6 +56,10 @@ class TelemetryService:
         self._current_tenant_id = None
         self._current_session_id = None
         
+        # Consent service integration
+        self._consent_service = None
+        self._consent_cache: Dict[str, bool] = {}
+        
         # Caches
         self._metric_cache: Dict[str, Any] = {}
         self._feature_cache: Dict[str, int] = {}
@@ -65,6 +69,46 @@ class TelemetryService:
         self._environment = os.getenv("ENVIRONMENT", "production")
         
         self._initialized = True
+    
+    def set_consent_service(self, consent_service):
+        """Set the consent service for checking user permissions"""
+        self._consent_service = consent_service
+    
+    def _check_consent(self, consent_type: str) -> bool:
+        """Check if user has granted consent for a tracking type"""
+        if not self._consent_service or not self._current_user_id:
+            return True  # Default to true if no consent service
+        
+        # Check cache first
+        cache_key = f"{self._current_user_id}:{consent_type}"
+        if cache_key in self._consent_cache:
+            return self._consent_cache[cache_key]
+        
+        # Check consent service
+        try:
+            from app.services.consent_service import ConsentType
+            consent_map = {
+                "analytics": ConsentType.ANALYTICS,
+                "telemetry": ConsentType.TELEMETRY,
+                "performance": ConsentType.PERFORMANCE_TRACKING,
+                "error": ConsentType.ERROR_TRACKING,
+                "usage": ConsentType.USAGE_STATISTICS
+            }
+            if consent_type in consent_map:
+                has_consent = self._consent_service.has_consent(
+                    self._current_user_id, 
+                    consent_map[consent_type]
+                )
+                self._consent_cache[cache_key] = has_consent
+                return has_consent
+        except Exception:
+            pass
+        
+        return True
+    
+    def clear_consent_cache(self):
+        """Clear the consent cache (call when user changes consent settings)"""
+        self._consent_cache.clear()
     
     def start(self):
         """Startet die Background-Worker"""
@@ -123,7 +167,19 @@ class TelemetryService:
         source_module: str = None,
         correlation_id: str = None
     ):
-        """Trackt ein Event"""
+        """Trackt ein Event (mit Consent-Check)"""
+        # Check consent based on category
+        consent_type = "telemetry"
+        if category == EventCategory.USER:
+            consent_type = "analytics"
+        elif category == EventCategory.PERFORMANCE:
+            consent_type = "performance"
+        elif category == EventCategory.ERROR:
+            consent_type = "error"
+        
+        if not self._check_consent(consent_type):
+            return  # User has not consented to this type of tracking
+        
         event = {
             'event_id': str(uuid.uuid4()),
             'event_name': event_name,
@@ -443,6 +499,200 @@ class TelemetryService:
         )
     
     # ==================== System Health ====================
+    
+    def get_device_info(self) -> Dict[str, Any]:
+        """Sammelt detaillierte Geräteinformationen"""
+        device_info = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'system': {},
+            'hardware': {},
+            'network': {},
+            'storage': {},
+            'processes': {}
+        }
+        
+        # System-Info
+        try:
+            device_info['system'] = {
+                'os': platform.system(),
+                'os_version': platform.release(),
+                'os_build': platform.version(),
+                'architecture': platform.machine(),
+                'processor': platform.processor(),
+                'hostname': platform.node(),
+                'python_version': sys.version.split()[0],
+                'boot_time': datetime.fromtimestamp(psutil.boot_time()).isoformat() if hasattr(psutil, 'boot_time') else None
+            }
+        except Exception as e:
+            device_info['system']['error'] = str(e)
+        
+        # Hardware-Info
+        try:
+            cpu_freq = psutil.cpu_freq()
+            device_info['hardware'] = {
+                'cpu_count_physical': psutil.cpu_count(logical=False),
+                'cpu_count_logical': psutil.cpu_count(logical=True),
+                'cpu_freq_current': round(cpu_freq.current, 2) if cpu_freq else None,
+                'cpu_freq_max': round(cpu_freq.max, 2) if cpu_freq and cpu_freq.max else None,
+                'ram_total_gb': round(psutil.virtual_memory().total / (1024**3), 2),
+                'ram_available_gb': round(psutil.virtual_memory().available / (1024**3), 2),
+                'swap_total_gb': round(psutil.swap_memory().total / (1024**3), 2),
+                'swap_used_gb': round(psutil.swap_memory().used / (1024**3), 2)
+            }
+        except Exception as e:
+            device_info['hardware']['error'] = str(e)
+        
+        # Netzwerk-Info
+        try:
+            net_io = psutil.net_io_counters()
+            device_info['network'] = {
+                'bytes_sent_gb': round(net_io.bytes_sent / (1024**3), 3),
+                'bytes_recv_gb': round(net_io.bytes_recv / (1024**3), 3),
+                'packets_sent': net_io.packets_sent,
+                'packets_recv': net_io.packets_recv,
+                'errors_in': net_io.errin,
+                'errors_out': net_io.errout
+            }
+            
+            # Netzwerk-Interfaces
+            interfaces = []
+            for name, addrs in psutil.net_if_addrs().items():
+                for addr in addrs:
+                    if addr.family.name == 'AF_INET':
+                        interfaces.append({
+                            'name': name,
+                            'ip': addr.address,
+                            'netmask': addr.netmask
+                        })
+            device_info['network']['interfaces'] = interfaces[:5]  # Nur erste 5
+        except Exception as e:
+            device_info['network']['error'] = str(e)
+        
+        # Speicher-Info
+        try:
+            partitions = []
+            for partition in psutil.disk_partitions():
+                try:
+                    usage = psutil.disk_usage(partition.mountpoint)
+                    partitions.append({
+                        'device': partition.device,
+                        'mountpoint': partition.mountpoint,
+                        'fstype': partition.fstype,
+                        'total_gb': round(usage.total / (1024**3), 2),
+                        'used_gb': round(usage.used / (1024**3), 2),
+                        'free_gb': round(usage.free / (1024**3), 2),
+                        'percent': usage.percent
+                    })
+                except:
+                    pass
+            device_info['storage']['partitions'] = partitions
+        except Exception as e:
+            device_info['storage']['error'] = str(e)
+        
+        # Prozess-Info
+        try:
+            # Top 5 Prozesse nach RAM-Nutzung
+            processes = []
+            for proc in psutil.process_iter(['pid', 'name', 'memory_percent', 'cpu_percent']):
+                try:
+                    pinfo = proc.info
+                    if pinfo['memory_percent'] and pinfo['memory_percent'] > 0.1:
+                        processes.append({
+                            'pid': pinfo['pid'],
+                            'name': pinfo['name'],
+                            'memory_percent': round(pinfo['memory_percent'], 2),
+                            'cpu_percent': round(pinfo['cpu_percent'] or 0, 2)
+                        })
+                except:
+                    pass
+            
+            processes.sort(key=lambda x: x['memory_percent'], reverse=True)
+            device_info['processes']['top_by_memory'] = processes[:5]
+            device_info['processes']['total_count'] = len(list(psutil.process_iter()))
+        except Exception as e:
+            device_info['processes']['error'] = str(e)
+        
+        return device_info
+    
+    def get_realtime_metrics(self) -> Dict[str, Any]:
+        """Holt Echtzeit-Metriken für das Dashboard"""
+        metrics = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'cpu': {},
+            'memory': {},
+            'disk': {},
+            'network': {},
+            'app': {}
+        }
+        
+        # CPU-Metriken
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            cpu_per_core = psutil.cpu_percent(interval=0.1, percpu=True)
+            metrics['cpu'] = {
+                'percent': cpu_percent,
+                'per_core': cpu_per_core,
+                'load_avg': list(psutil.getloadavg()) if hasattr(psutil, 'getloadavg') else [0, 0, 0]
+            }
+        except Exception as e:
+            metrics['cpu']['error'] = str(e)
+        
+        # Memory-Metriken
+        try:
+            vm = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+            metrics['memory'] = {
+                'percent': vm.percent,
+                'used_gb': round(vm.used / (1024**3), 2),
+                'available_gb': round(vm.available / (1024**3), 2),
+                'total_gb': round(vm.total / (1024**3), 2),
+                'swap_percent': swap.percent,
+                'swap_used_gb': round(swap.used / (1024**3), 2)
+            }
+        except Exception as e:
+            metrics['memory']['error'] = str(e)
+        
+        # Disk-Metriken
+        try:
+            disk = psutil.disk_usage('/')
+            disk_io = psutil.disk_io_counters()
+            metrics['disk'] = {
+                'percent': disk.percent,
+                'used_gb': round(disk.used / (1024**3), 2),
+                'free_gb': round(disk.free / (1024**3), 2),
+                'read_mb': round(disk_io.read_bytes / (1024**2), 2) if disk_io else 0,
+                'write_mb': round(disk_io.write_bytes / (1024**2), 2) if disk_io else 0
+            }
+        except Exception as e:
+            metrics['disk']['error'] = str(e)
+        
+        # Network-Metriken
+        try:
+            net_io = psutil.net_io_counters()
+            metrics['network'] = {
+                'bytes_sent_mb': round(net_io.bytes_sent / (1024**2), 2),
+                'bytes_recv_mb': round(net_io.bytes_recv / (1024**2), 2),
+                'packets_sent': net_io.packets_sent,
+                'packets_recv': net_io.packets_recv
+            }
+        except Exception as e:
+            metrics['network']['error'] = str(e)
+        
+        # App-spezifische Metriken
+        try:
+            current_process = psutil.Process()
+            metrics['app'] = {
+                'memory_mb': round(current_process.memory_info().rss / (1024**2), 2),
+                'memory_percent': round(current_process.memory_percent(), 2),
+                'cpu_percent': round(current_process.cpu_percent(), 2),
+                'threads': current_process.num_threads(),
+                'open_files': len(current_process.open_files()),
+                'connections': len(current_process.connections())
+            }
+        except Exception as e:
+            metrics['app']['error'] = str(e)
+        
+        return metrics
     
     def check_system_health(self) -> Dict[str, Any]:
         """Führt einen System-Health-Check durch"""

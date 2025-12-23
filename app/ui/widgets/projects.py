@@ -332,9 +332,12 @@ class ProjectsWidget(QWidget):
             self.refresh()
     
     def refresh(self):
-        """Load projects from database with pagination"""
+        """Load projects from database with pagination and optimized rendering"""
         session = self.db.get_session()
         try:
+            # Disable updates during data load for better performance
+            self.table.setUpdatesEnabled(False)
+            
             base_query = select(Project).options(
                 selectinload(Project.customer)
             ).where(Project.is_deleted == False)
@@ -386,6 +389,8 @@ class ProjectsWidget(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Fehler", f"Fehler beim Laden: {e}")
         finally:
+            # Re-enable updates
+            self.table.setUpdatesEnabled(True)
             session.close()
     
     def _set_row_data(self, row: int, project):

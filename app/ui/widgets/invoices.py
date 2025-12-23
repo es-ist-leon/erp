@@ -231,6 +231,9 @@ class InvoicesWidget(QWidget):
     def refresh(self):
         session = self.db.get_session()
         try:
+            # Disable updates during data load for better performance
+            self.table.setUpdatesEnabled(False)
+            
             query = select(Invoice).options(
                 selectinload(Invoice.customer)
             ).where(Invoice.is_deleted == False)
@@ -297,6 +300,8 @@ class InvoicesWidget(QWidget):
         except Exception as e:
             print(f"Error loading invoices: {e}")
         finally:
+            # Re-enable updates
+            self.table.setUpdatesEnabled(True)
             session.close()
     
     def add_invoice(self):

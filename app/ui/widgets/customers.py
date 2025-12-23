@@ -322,10 +322,13 @@ class CustomersWidget(QWidget):
             self.refresh()
     
     def refresh(self):
-        """Load customers from database with pagination"""
+        """Load customers from database with pagination and optimized rendering"""
         session = self.db.get_session()
         try:
-            # Build base query
+            # Disable updates during data load for better performance
+            self.table.setUpdatesEnabled(False)
+            
+            # Build base query with only needed columns
             base_query = select(Customer).where(Customer.is_deleted == False)
             
             # Apply tenant filter
@@ -379,6 +382,8 @@ class CustomersWidget(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Fehler", f"Fehler beim Laden: {e}")
         finally:
+            # Re-enable updates
+            self.table.setUpdatesEnabled(True)
             session.close()
     
     def _set_row_data(self, row: int, customer):

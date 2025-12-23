@@ -305,6 +305,9 @@ class OrdersWidget(QWidget):
     def refresh_quotes(self):
         session = self.db.get_session()
         try:
+            # Disable updates during data load for better performance
+            self.quotes_table.setUpdatesEnabled(False)
+            
             query = select(Quote).options(
                 selectinload(Quote.customer)
             ).where(Quote.is_deleted == False).order_by(Quote.created_at.desc())
@@ -342,11 +345,16 @@ class OrdersWidget(QWidget):
         except Exception as e:
             print(f"Error loading quotes: {e}")
         finally:
+            # Re-enable updates
+            self.quotes_table.setUpdatesEnabled(True)
             session.close()
     
     def refresh_orders(self):
         session = self.db.get_session()
         try:
+            # Disable updates during data load for better performance
+            self.orders_table.setUpdatesEnabled(False)
+            
             query = select(Order).options(
                 selectinload(Order.customer)
             ).where(Order.is_deleted == False).order_by(Order.created_at.desc())
@@ -384,6 +392,8 @@ class OrdersWidget(QWidget):
         except Exception as e:
             print(f"Error loading orders: {e}")
         finally:
+            # Re-enable updates
+            self.orders_table.setUpdatesEnabled(True)
             session.close()
     
     def add_quote(self):

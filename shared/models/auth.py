@@ -51,6 +51,9 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     # Tenant (for multi-company support)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey('tenants.id'), nullable=True)
     
+    # User's personal database name (created on first login)
+    database_name = Column(String(100), nullable=True, unique=True)
+    
     # Auth tracking
     last_login = Column(DateTime, nullable=True)
     failed_login_attempts = Column(String(10), default="0")

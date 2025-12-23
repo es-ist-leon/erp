@@ -220,6 +220,9 @@ class EmployeesWidget(QWidget):
     def refresh(self):
         session = self.db.get_session()
         try:
+            # Disable updates during data load for better performance
+            self.table.setUpdatesEnabled(False)
+            
             query = select(Employee).where(Employee.is_deleted == False)
             
             search = self.search_input.text().strip()
@@ -272,6 +275,8 @@ class EmployeesWidget(QWidget):
         except Exception as e:
             print(f"Error loading employees: {e}")
         finally:
+            # Re-enable updates
+            self.table.setUpdatesEnabled(True)
             session.close()
     
     def add_employee(self):

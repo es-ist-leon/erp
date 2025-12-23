@@ -288,64 +288,105 @@ class DashboardWidget(QWidget):
         self.load_statistics()
     
     def load_statistics(self):
-        """Load statistics from database"""
+        """Load all statistics from database in a single optimized query"""
+        from app.services.cache_service import get_cache_service
+        
+        cache = get_cache_service()
+        cache_key = f"dashboard_stats_{self.user.id if self.user else 'global'}"
+        
+        # Try to get from cache first (60 second TTL)
+        cached_stats = cache.get_stats(cache_key)
+        if cached_stats:
+            for key, value in cached_stats.items():
+                if key in self.stat_cards:
+                    self.stat_cards[key].set_value(str(value))
+            return
+        
         try:
             with self.db.session_scope() as session:
-                tenant_id = self.user.tenant_id if self.user and hasattr(self.user, 'tenant_id') else None
+                from sqlalchemy import text
                 
-                # Count customers
-                customer_count = session.query(func.count(Customer.id)).filter(
+                # Single optimized query for all counts - much faster than 6 separate queries
+                stats_query = text("""
+                    SELECT 
+                        (SELECT COUNT(*) FROM customers WHERE is_deleted = false) as customer_count,
+                        (SELECT COUNT(*) FROM projects WHERE is_deleted = false AND status IN ('planning', 'in_progress')) as project_count,
+                        (SELECT COUNT(*) FROM quotes WHERE is_deleted = false AND status IN ('draft', 'sent')) as quote_count,
+                        (SELECT COUNT(*) FROM orders WHERE is_deleted = false) as order_count,
+                        (SELECT COUNT(*) FROM invoices WHERE is_deleted = false AND status IN ('draft', 'sent')) as invoice_count,
+                        (SELECT COUNT(*) FROM employees WHERE is_deleted = false) as employee_count
+                """)
+                
+                try:
+                    result = session.execute(stats_query).fetchone()
+                    if result:
+                        stats = {
+                            "customers": result[0] or 0,
+                            "projects": result[1] or 0,
+                            "quotes": result[2] or 0,
+                            "orders": result[3] or 0,
+                            "invoices": result[4] or 0,
+                            "employees": result[5] or 0
+                        }
+                        
+                        # Cache the results
+                        cache.set_stats(cache_key, stats, ttl=60)
+                        
+                        for key, value in stats.items():
+                            self.stat_cards[key].set_value(str(value))
+                        return
+                except Exception:
+                    pass  # Fall back to individual queries if combined query fails
+                
+                # Fallback: Individual queries (for compatibility)
+                stats = {}
+                
+                stats["customers"] = session.query(func.count(Customer.id)).filter(
                     Customer.is_deleted == False
                 ).scalar() or 0
-                self.stat_cards["customers"].set_value(str(customer_count))
                 
-                # Count active projects
                 try:
-                    project_count = session.query(func.count(Project.id)).filter(
+                    stats["projects"] = session.query(func.count(Project.id)).filter(
                         Project.is_deleted == False,
                         Project.status.in_([ProjectStatus.PLANNING, ProjectStatus.IN_PROGRESS])
                     ).scalar() or 0
-                    self.stat_cards["projects"].set_value(str(project_count))
                 except:
-                    self.stat_cards["projects"].set_value("0")
+                    stats["projects"] = 0
                 
-                # Count open quotes
                 try:
-                    quote_count = session.query(func.count(Quote.id)).filter(
+                    stats["quotes"] = session.query(func.count(Quote.id)).filter(
                         Quote.is_deleted == False,
                         Quote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT])
                     ).scalar() or 0
-                    self.stat_cards["quotes"].set_value(str(quote_count))
                 except:
-                    self.stat_cards["quotes"].set_value("0")
+                    stats["quotes"] = 0
                 
-                # Count open orders
                 try:
-                    order_count = session.query(func.count(Order.id)).filter(
+                    stats["orders"] = session.query(func.count(Order.id)).filter(
                         Order.is_deleted == False
                     ).scalar() or 0
-                    self.stat_cards["orders"].set_value(str(order_count))
                 except:
-                    self.stat_cards["orders"].set_value("0")
+                    stats["orders"] = 0
                 
-                # Count open invoices
                 try:
-                    invoice_count = session.query(func.count(Invoice.id)).filter(
+                    stats["invoices"] = session.query(func.count(Invoice.id)).filter(
                         Invoice.is_deleted == False,
                         Invoice.status.in_([InvoiceStatus.DRAFT, InvoiceStatus.SENT])
                     ).scalar() or 0
-                    self.stat_cards["invoices"].set_value(str(invoice_count))
                 except:
-                    self.stat_cards["invoices"].set_value("0")
+                    stats["invoices"] = 0
                 
-                # Count employees
                 try:
-                    employee_count = session.query(func.count(Employee.id)).filter(
+                    stats["employees"] = session.query(func.count(Employee.id)).filter(
                         Employee.is_deleted == False
                     ).scalar() or 0
-                    self.stat_cards["employees"].set_value(str(employee_count))
                 except:
-                    self.stat_cards["employees"].set_value("0")
+                    stats["employees"] = 0
+                
+                # Cache and display
+                cache.set_stats(cache_key, stats, ttl=60)
+                for key, value in stats.items():
+                    self.stat_cards[key].set_value(str(value))
                     
         except Exception as e:
             print(f"Error loading dashboard statistics: {e}")

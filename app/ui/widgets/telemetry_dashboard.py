@@ -707,7 +707,95 @@ class TelemetryDashboard(QWidget):
         
         layout.addLayout(resources_layout)
         
-        layout.addStretch()
+        # Device Info Group
+        device_group = QGroupBox("🖥️ Geräteinformationen")
+        device_group.setStyleSheet("""
+            QGroupBox {
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
+                padding: 20px;
+                margin-top: 12px;
+                font-weight: 600;
+                color: #212121;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 16px;
+                padding: 0 8px;
+            }
+        """)
+        device_layout = QGridLayout(device_group)
+        device_layout.setSpacing(16)
+        
+        # Device info labels
+        self.device_labels = {}
+        device_fields = [
+            ("Betriebssystem", "os"),
+            ("OS Version", "os_version"),
+            ("Architektur", "architecture"),
+            ("Hostname", "hostname"),
+            ("CPU Kerne (physisch)", "cpu_physical"),
+            ("CPU Kerne (logisch)", "cpu_logical"),
+            ("CPU Frequenz", "cpu_freq"),
+            ("RAM Gesamt", "ram_total"),
+            ("Netzwerk Gesendet", "net_sent"),
+            ("Netzwerk Empfangen", "net_recv"),
+            ("App Speicher", "app_memory"),
+            ("App Threads", "app_threads"),
+        ]
+        
+        for i, (label_text, key) in enumerate(device_fields):
+            row = i // 4
+            col = (i % 4) * 2
+            
+            label = QLabel(f"{label_text}:")
+            label.setStyleSheet("color: #757575; font-weight: 500;")
+            device_layout.addWidget(label, row, col)
+            
+            value_label = QLabel("-")
+            value_label.setStyleSheet("color: #212121; font-weight: 600;")
+            self.device_labels[key] = value_label
+            device_layout.addWidget(value_label, row, col + 1)
+        
+        layout.addWidget(device_group)
+        
+        # Process table
+        process_group = QGroupBox("📊 Top Prozesse (nach RAM)")
+        process_group.setStyleSheet("""
+            QGroupBox {
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
+                padding: 16px;
+                margin-top: 12px;
+                font-weight: 600;
+                color: #212121;
+            }
+        """)
+        process_layout = QVBoxLayout(process_group)
+        
+        self.process_table = QTableWidget()
+        self.process_table.setColumnCount(4)
+        self.process_table.setHorizontalHeaderLabels(["PID", "Name", "RAM %", "CPU %"])
+        self.process_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.process_table.setStyleSheet("""
+            QTableWidget {
+                background: transparent;
+                border: none;
+                color: #212121;
+            }
+            QHeaderView::section {
+                background: #fafafa;
+                color: #424242;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+        """)
+        process_layout.addWidget(self.process_table)
+        
+        layout.addWidget(process_group)
         
         return widget
     
@@ -986,6 +1074,57 @@ class TelemetryDashboard(QWidget):
                 db_data.get('status', 'unknown'),
                 f"{db_data.get('latency_ms', 0):.0f}ms" if db_data.get('latency_ms') else ""
             )
+            
+            # Geräte-Informationen laden
+            device_info = telemetry.get_device_info()
+            realtime = telemetry.get_realtime_metrics()
+            
+            # System Info
+            sys_info = device_info.get('system', {})
+            self.device_labels['os'].setText(f"{sys_info.get('os', '-')} {sys_info.get('os_version', '')}")
+            self.device_labels['os_version'].setText(sys_info.get('os_build', '-')[:30])
+            self.device_labels['architecture'].setText(sys_info.get('architecture', '-'))
+            self.device_labels['hostname'].setText(sys_info.get('hostname', '-'))
+            
+            # Hardware Info
+            hw_info = device_info.get('hardware', {})
+            self.device_labels['cpu_physical'].setText(str(hw_info.get('cpu_count_physical', '-')))
+            self.device_labels['cpu_logical'].setText(str(hw_info.get('cpu_count_logical', '-')))
+            freq = hw_info.get('cpu_freq_current')
+            self.device_labels['cpu_freq'].setText(f"{freq:.0f} MHz" if freq else '-')
+            ram = hw_info.get('ram_total_gb')
+            self.device_labels['ram_total'].setText(f"{ram:.1f} GB" if ram else '-')
+            
+            # Network Info
+            net_info = device_info.get('network', {})
+            self.device_labels['net_sent'].setText(f"{net_info.get('bytes_sent_gb', 0):.2f} GB")
+            self.device_labels['net_recv'].setText(f"{net_info.get('bytes_recv_gb', 0):.2f} GB")
+            
+            # App Info
+            app_info = realtime.get('app', {})
+            self.device_labels['app_memory'].setText(f"{app_info.get('memory_mb', 0):.0f} MB")
+            self.device_labels['app_threads'].setText(str(app_info.get('threads', '-')))
+            
+            # Uptime berechnen
+            boot_time = sys_info.get('boot_time')
+            if boot_time:
+                try:
+                    from datetime import datetime
+                    boot_dt = datetime.fromisoformat(boot_time)
+                    uptime = datetime.now() - boot_dt
+                    hours = int(uptime.total_seconds() // 3600)
+                    self.uptime_card.update_value(f"{hours}h")
+                except:
+                    pass
+            
+            # Prozess-Tabelle aktualisieren
+            processes = device_info.get('processes', {}).get('top_by_memory', [])
+            self.process_table.setRowCount(len(processes))
+            for row, proc in enumerate(processes):
+                self.process_table.setItem(row, 0, QTableWidgetItem(str(proc.get('pid', ''))))
+                self.process_table.setItem(row, 1, QTableWidgetItem(proc.get('name', '')))
+                self.process_table.setItem(row, 2, QTableWidgetItem(f"{proc.get('memory_percent', 0):.1f}%"))
+                self.process_table.setItem(row, 3, QTableWidgetItem(f"{proc.get('cpu_percent', 0):.1f}%"))
             
         except Exception as e:
             print(f"Fehler beim Laden der Health-Daten: {e}")
