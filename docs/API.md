@@ -366,7 +366,202 @@ metrics = telemetry.get_metrics(
 
 ---
 
-## 4. Datenmodelle
+## 4. FileStorageService
+
+Service für Datei-Upload und -Download mit MongoDB GridFS.
+
+### 4.1 Initialisierung
+
+```python
+from app.services.file_storage_service import FileStorageService
+
+file_service = FileStorageService(tenant_id)
+```
+
+### 4.2 Methoden
+
+#### upload_file(file_path, entity_type, entity_id)
+
+Lädt eine Datei hoch.
+
+```python
+file_id = file_service.upload_file(
+    file_path="C:/temp/foto.jpg",
+    entity_type="defect",
+    entity_id=defect_id
+)
+```
+
+**Parameters:**
+- `file_path`: Pfad zur Datei
+- `entity_type`: Verknüpfter Typ (defect, project, etc.)
+- `entity_id`: UUID der verknüpften Entität
+
+**Returns:** MongoDB ObjectId der Datei
+
+---
+
+#### get_file(file_id)
+
+Lädt eine Datei herunter.
+
+```python
+file_data, filename, content_type = file_service.get_file(file_id)
+```
+
+**Parameters:**
+- `file_id`: MongoDB ObjectId
+
+**Returns:** Tuple (bytes, filename, content_type)
+
+---
+
+#### delete_file(file_id)
+
+Löscht eine Datei.
+
+```python
+file_service.delete_file(file_id)
+```
+
+---
+
+#### get_files_for_entity(entity_type, entity_id)
+
+Lädt alle Dateien einer Entität.
+
+```python
+files = file_service.get_files_for_entity("defect", defect_id)
+for f in files:
+    print(f['filename'], f['file_size'])
+```
+
+**Returns:** Liste von Datei-Metadaten
+
+---
+
+## 5. BankingService
+
+Service für FinTS/HBCI Banking-Integration.
+
+### 5.1 Initialisierung
+
+```python
+from app.services.banking_service import BankingService
+
+banking_service = BankingService(tenant_id)
+```
+
+### 5.2 Methoden
+
+#### connect_bank(blz, username, pin)
+
+Verbindet ein Bankkonto.
+
+```python
+account = banking_service.connect_bank(
+    blz="70150000",
+    username="max.mustermann",
+    pin="secure_pin"
+)
+```
+
+**Parameters:**
+- `blz`: Bankleitzahl
+- `username`: Online-Banking Benutzername
+- `pin`: PIN
+
+**Returns:** BankAccount-Objekt
+
+---
+
+#### sync_transactions(account_id)
+
+Synchronisiert Transaktionen.
+
+```python
+transactions = banking_service.sync_transactions(account_id)
+```
+
+**Returns:** Liste neuer Transaktionen
+
+---
+
+#### get_balance(account_id)
+
+Ruft aktuellen Kontostand ab.
+
+```python
+balance = banking_service.get_balance(account_id)
+print(f"Kontostand: {balance} EUR")
+```
+
+**Returns:** Decimal
+
+---
+
+## 6. MLService
+
+Service für Machine Learning Vorhersagen.
+
+### 6.1 Initialisierung
+
+```python
+from app.services.ml_service import MLService
+
+ml_service = MLService(db_service, tenant_id)
+```
+
+### 6.2 Methoden
+
+#### predict_project_cost(project_data)
+
+Prognostiziert Projektkosten.
+
+```python
+prediction = ml_service.predict_project_cost({
+    'project_type': 'NEUBAU',
+    'gross_floor_area': 250,
+    'floors_above_ground': 2,
+    'wood_volume_m3': 80
+})
+print(f"Geschätzte Kosten: {prediction['cost']} EUR")
+print(f"Konfidenz: {prediction['confidence']*100}%")
+```
+
+**Returns:** Dict mit cost, confidence, range_min, range_max
+
+---
+
+#### predict_defect_probability(project_id)
+
+Berechnet Mängelwahrscheinlichkeit.
+
+```python
+risk = ml_service.predict_defect_probability(project_id)
+if risk['probability'] > 0.7:
+    print("Hohes Mängelrisiko!")
+```
+
+**Returns:** Dict mit probability, factors
+
+---
+
+#### analyze_customer_value(customer_id)
+
+Analysiert Kundenwert.
+
+```python
+analysis = ml_service.analyze_customer_value(customer_id)
+print(f"Lifetime Value: {analysis['ltv']} EUR")
+print(f"Zahlungsmoral: {analysis['payment_score']}")
+```
+
+**Returns:** Dict mit ltv, payment_score, churn_risk
+
+---
+
+## 7. Datenmodelle
 
 ### 4.1 Customer (Kunde)
 
@@ -544,7 +739,7 @@ class Invoice:
 
 ---
 
-## 5. Enumerationen
+## 8. Enumerationen
 
 ### CustomerType
 ```python
@@ -577,7 +772,7 @@ class InvoiceStatus(enum.Enum):
 
 ---
 
-## 6. Fehlerbehandlung
+## 9. Fehlerbehandlung
 
 ### Exceptions
 

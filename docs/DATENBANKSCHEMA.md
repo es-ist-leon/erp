@@ -466,6 +466,56 @@ Zentrale Tabelle für Multi-Tenant-Architektur.
 
 ---
 
+### 6.6 bank_accounts (Bankkonten)
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| id | UUID | Primärschlüssel |
+| tenant_id | UUID | FK → tenants.id |
+| name | VARCHAR(200) | Kontobezeichnung |
+| bank_name | VARCHAR(100) | Bankname |
+| bank_code | VARCHAR(20) | Bankleitzahl |
+| iban | VARCHAR(34) | IBAN |
+| bic | VARCHAR(11) | BIC/SWIFT |
+| account_holder | VARCHAR(200) | Kontoinhaber |
+| account_type | ENUM | Kontotyp |
+| currency | VARCHAR(3) | Währung (EUR) |
+| current_balance | NUMERIC(15,2) | Aktueller Kontostand |
+| balance_date | TIMESTAMP | Stand vom |
+| provider | VARCHAR(50) | Banking-Provider (FinTS) |
+| credentials_encrypted | TEXT | Verschlüsselte Zugangsdaten |
+| online_banking_enabled | BOOLEAN | Online-Banking aktiv |
+| last_sync | TIMESTAMP | Letzte Synchronisation |
+| is_active | BOOLEAN | Aktiv |
+| is_default | BOOLEAN | Standardkonto |
+| created_at | TIMESTAMP | Erstelldatum |
+| is_deleted | BOOLEAN | Soft-Delete |
+
+---
+
+### 6.7 bank_transactions (Banktransaktionen)
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| id | UUID | Primärschlüssel |
+| tenant_id | UUID | FK → tenants.id |
+| bank_account_id | UUID | FK → bank_accounts.id |
+| transaction_id | VARCHAR(100) | Externe Transaktions-ID |
+| booking_date | DATE | Buchungsdatum |
+| value_date | DATE | Wertstellung |
+| amount | NUMERIC(15,2) | Betrag |
+| currency | VARCHAR(3) | Währung |
+| purpose | TEXT | Verwendungszweck |
+| counterparty_name | VARCHAR(200) | Name Gegenkonto |
+| counterparty_iban | VARCHAR(34) | IBAN Gegenkonto |
+| counterparty_bic | VARCHAR(11) | BIC Gegenkonto |
+| transaction_type | VARCHAR(50) | Transaktionsart |
+| is_matched | BOOLEAN | Mit Rechnung verknüpft |
+| matched_invoice_id | UUID | FK → invoices.id |
+| created_at | TIMESTAMP | Importdatum |
+
+---
+
 ## 7. Personalverwaltung
 
 ### 7.1 employees (Mitarbeiter)
@@ -613,8 +663,8 @@ Zentrale Tabelle für Multi-Tenant-Architektur.
 | fixed_by | VARCHAR(200) | Behoben durch |
 | cost_estimate | NUMERIC(12,2) | Geschätzte Kosten |
 | actual_cost | NUMERIC(12,2) | Tatsächliche Kosten |
-| photos_before | JSON | Fotos vorher |
-| photos_after | JSON | Fotos nachher |
+| photos_before | JSON | Fotos vorher (MongoDB GridFS IDs) |
+| photos_after | JSON | Fotos nachher (MongoDB GridFS IDs) |
 | notes | TEXT | Notizen |
 | created_at | TIMESTAMP | Erstelldatum |
 | is_deleted | BOOLEAN | Soft-Delete |
@@ -668,6 +718,47 @@ Zentrale Tabelle für Multi-Tenant-Architektur.
 | metric_unit | VARCHAR(20) | Einheit |
 | tags | JSON | Tags |
 | timestamp | TIMESTAMP | Zeitstempel |
+
+---
+
+## 11. Dateispeicher (MongoDB GridFS)
+
+Dateien werden in MongoDB GridFS gespeichert für:
+- Skalierbarkeit
+- Mandantentrennung
+- Große Dateien (bis 16 MB)
+
+### 11.1 file_storage (MongoDB Collection)
+
+| Feld | Typ | Beschreibung |
+|------|-----|--------------|
+| _id | ObjectId | Primärschlüssel |
+| tenant_id | String | Mandanten-ID |
+| filename | String | Dateiname |
+| content_type | String | MIME-Type |
+| file_id | ObjectId | GridFS File ID |
+| entity_type | String | Verknüpfter Entitätstyp |
+| entity_id | String | Verknüpfte Entitäts-ID |
+| uploaded_by | String | Hochgeladen von (User-ID) |
+| uploaded_at | DateTime | Hochladedatum |
+| file_size | Integer | Dateigröße in Bytes |
+
+---
+
+## 12. Machine Learning
+
+### 12.1 ml_predictions (ML-Vorhersagen)
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| id | UUID | Primärschlüssel |
+| tenant_id | UUID | FK → tenants.id |
+| model_type | VARCHAR(50) | Modelltyp |
+| entity_type | VARCHAR(50) | Bezogene Entität |
+| entity_id | UUID | Entitäts-ID |
+| prediction_data | JSONB | Vorhersagedaten |
+| confidence | NUMERIC(5,4) | Konfidenz (0-1) |
+| created_at | TIMESTAMP | Erstelldatum |
 
 ---
 

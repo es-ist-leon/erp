@@ -26,7 +26,12 @@
 
 - **Betriebssystem:** Windows 10/11 (64-bit)
 - **Python:** 3.12 oder höher
-- **Internetverbindung:** Für Datenbankzugriff erforderlich
+- **Internetverbindung:** Für Datenbankzugriff und Banking erforderlich
+
+### Datenbanken
+
+- **PostgreSQL:** Cloud-Datenbank (bereitgestellt)
+- **MongoDB:** Für Dateispeicher (bereitgestellt)
 
 ---
 
@@ -161,6 +166,20 @@ Für sichere Verbindungen zur Cloud-Datenbank:
 1. Legen Sie das CA-Zertifikat in `certs/ca.crt` ab
 2. Das Zertifikat wird automatisch verwendet
 
+### 4.4 MongoDB-Konfiguration
+
+Die MongoDB-Verbindung für Dateispeicher ist in `mongodb-credentials.txt` konfiguriert:
+
+```
+host=server.mongodb.example.com
+port=27017
+database=holzbauerp_files
+user=app_user
+password=secure_password
+```
+
+Das SSL-Zertifikat für MongoDB liegt in `certs/mgdb-mgdb-epic-kirch.pem`.
+
 ---
 
 ## 5. Erster Start
@@ -193,6 +212,11 @@ Nach der ersten Anmeldung:
 3. **Grundeinstellungen**
    - Nummernkreise konfigurieren
    - Standardwerte festlegen
+
+4. **Bankkonto verbinden (optional)**
+   - Finanzen → Banking
+   - Bank auswählen und Zugangsdaten eingeben
+   - TAN-Verfahren einrichten
 
 ---
 

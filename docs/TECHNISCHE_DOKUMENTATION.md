@@ -64,6 +64,9 @@
 - **Lazy Loading:** Daten werden bei Bedarf geladen
 - **Connection Pooling:** Effiziente Datenbankverbindungen
 - **Caching:** LRU-Cache für häufig verwendete Daten
+- **File Storage:** MongoDB GridFS für Fotos und Dokumente
+- **Banking:** FinTS/HBCI für deutsche Banken
+- **Machine Learning:** Prognose- und Analysedienste
 
 ### 1.3 Technologie-Stack
 
@@ -73,7 +76,10 @@
 | UI-Framework | PyQt6 | 6.6+ |
 | ORM | SQLAlchemy | 2.0+ |
 | Datenbank | PostgreSQL | 15+ |
+| Dateispeicher | MongoDB GridFS | 7.0+ |
 | Passwort-Hashing | passlib (bcrypt) | 1.7+ |
+| Banking | FinTS/HBCI | 3.0 |
+| Machine Learning | scikit-learn | 1.3+ |
 | Telemetrie | Custom Implementation | 1.0 |
 
 ---
@@ -114,11 +120,14 @@ erp/
 │   │   ├── fleet.py              # Fuhrpark
 │   │   ├── quality.py            # Qualität
 │   │   ├── crm.py                # CRM
-│   │   └── telemetry.py          # Telemetrie
+│   │   ├── telemetry.py          # Telemetrie
+│   │   ├── banking.py            # Banking/FinTS
+│   │   └── file_storage.py       # Dateispeicher
 │   └── utils/                    # Hilfsfunktionen
 │
 ├── docs/                         # Dokumentation
 ├── certs/                        # SSL-Zertifikate
+├── file_storage/                 # Lokaler Dateicache
 ├── venv/                         # Virtuelle Umgebung
 ├── requirements.txt              # Python-Abhängigkeiten
 ├── HolzbauERP.bat               # Windows Starter
@@ -694,13 +703,22 @@ psycopg2-binary>=2.9.0
 passlib>=1.7.0
 bcrypt>=4.0.0
 python-dateutil>=2.8.0
+pymongo>=4.6.0
+fints>=3.0.0
+schwifty>=2024.1.0
+reportlab>=4.0.0
+openpyxl>=3.1.0
+scikit-learn>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
 ```
 
 ### B. Umgebungsvariablen
 
 | Variable | Beschreibung | Standard |
 |----------|--------------|----------|
-| `DATABASE_URL` | Datenbankverbindung | - |
+| `DATABASE_URL` | PostgreSQL-Verbindung | - |
+| `MONGODB_URL` | MongoDB-Verbindung für Dateien | - |
 | `DEBUG` | Debug-Modus | `false` |
 | `LOG_LEVEL` | Log-Level | `INFO` |
 

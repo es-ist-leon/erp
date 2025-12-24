@@ -12,7 +12,9 @@
 8. [Personalwesen](#8-personalwesen)
 9. [Fuhrpark & Geräte](#9-fuhrpark--geräte)
 10. [Qualitätsmanagement](#10-qualitätsmanagement)
-11. [Einstellungen](#11-einstellungen)
+11. [Banking-Integration](#11-banking-integration)
+12. [Machine Learning](#12-machine-learning)
+13. [Einstellungen](#13-einstellungen)
 
 ---
 
@@ -577,9 +579,16 @@ Für jede Fahrt:
    - Beschreibung
    - Ort (Bauteil/Raum)
    - Schweregrad
-   - Fotos (vorher)
+   - Fotos hochladen (Vorher-Bilder)
 4. Weisen Sie Verantwortlichen zu
 5. Setzen Sie Frist
+
+#### Fotos hochladen
+1. Klicken Sie auf "Fotos hinzufügen"
+2. Wählen Sie Bilder aus (JPG, PNG, max. 10 MB)
+3. Fotos werden in MongoDB GridFS gespeichert
+4. Miniaturansichten werden im Detailbereich angezeigt
+5. Klicken Sie auf ein Foto für Vollbildansicht
 
 #### Mangel beheben
 1. Dokumentieren Sie die Behebung
@@ -612,7 +621,94 @@ Verwalten Sie:
 
 ---
 
-## 11. Einstellungen
+## 11. Banking-Integration
+
+### 11.1 Bankkonto verbinden
+
+HolzbauERP unterstützt über 2.000 deutsche Banken via FinTS/HBCI.
+
+#### Neue Bankverbindung hinzufügen
+1. Navigieren Sie zu Finanzen → Banking
+2. Klicken Sie auf "Konto verbinden"
+3. Suchen Sie Ihre Bank (Sparkasse, Volksbank, Deutsche Bank, etc.)
+4. Geben Sie Ihre Online-Banking-Zugangsdaten ein
+5. Bestätigen Sie mit Ihrer TAN
+
+#### Unterstützte Banken
+- Alle Sparkassen
+- Alle Volks- und Raiffeisenbanken
+- Deutsche Bank
+- Commerzbank
+- Postbank
+- ING
+- DKB
+- HypoVereinsbank
+- Und viele weitere...
+
+### 11.2 Kontosynchronisation
+
+- **Automatische Synchronisation:** Täglich um 6:00 Uhr
+- **Manuelle Synchronisation:** Jederzeit per Klick
+- **Transaktionsimport:** Umsätze werden automatisch importiert
+
+### 11.3 Zahlungsabgleich
+
+1. Öffnen Sie Banking → Transaktionen
+2. Wählen Sie nicht zugeordnete Transaktionen
+3. System schlägt passende Rechnungen vor
+4. Bestätigen Sie die Zuordnung
+
+### 11.4 SEPA-Zahlungen
+
+- SEPA-Überweisungen erstellen
+- SEPA-Lastschriften (mit Gläubiger-ID)
+- Sammelaufträge für mehrere Zahlungen
+
+---
+
+## 12. Machine Learning
+
+### 12.1 Verfügbare ML-Services
+
+HolzbauERP bietet intelligente Automatisierung:
+
+| Service | Beschreibung |
+|---------|--------------|
+| Kostenprognose | Projektkosten basierend auf historischen Daten vorhersagen |
+| Qualitätsvorhersage | Wahrscheinlichkeit für Mängel berechnen |
+| Lieferzeitoptimierung | Optimale Bestellzeitpunkte ermitteln |
+| Kundenanalyse | Kundenwert und Zahlungsverhalten analysieren |
+
+### 12.2 Kostenprognose
+
+1. Öffnen Sie ein Projekt
+2. Klicken Sie auf "KI-Prognose"
+3. Das System analysiert:
+   - Ähnliche vergangene Projekte
+   - Materialpreise
+   - Lohnkosten
+   - Saisonale Faktoren
+4. Ergebnis: Geschätzte Kosten mit Konfidenzintervall
+
+### 12.3 Qualitätsvorhersage
+
+Basierend auf Projektparametern:
+- Projekttyp und -größe
+- Wetterbedingungen
+- Subunternehmer-Bewertungen
+- Materialqualität
+
+Das System warnt vor erhöhtem Mängelrisiko.
+
+### 12.4 Empfehlungen aktivieren
+
+1. Einstellungen → ML-Services
+2. Aktivieren Sie gewünschte Services
+3. Konfigurieren Sie Schwellenwerte für Benachrichtigungen
+
+---
+
+## 13. Einstellungen
 
 ### 11.1 Firmendaten
 

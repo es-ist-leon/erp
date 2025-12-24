@@ -34,8 +34,13 @@ Die vollständige Dokumentation finden Sie im `docs/` Ordner:
 - ✅ Finanzverwaltung & Buchhaltung
 - ✅ Personalwesen & Lohnabrechnung
 - ✅ Fuhrpark & Geräteverwaltung
-- ✅ Qualitätsmanagement
+- ✅ Qualitätsmanagement mit Foto-Upload
 - ✅ Telemetrie & Monitoring
+- ✅ Banking-Integration (FinTS/HBCI)
+- ✅ Machine Learning Services
+- ✅ Datei-Upload mit MongoDB GridFS
+- ✅ Multi-Tenant Architektur
+- ✅ Export-Funktionen (PDF, Excel, CSV)
 
 ## Lizenz
 

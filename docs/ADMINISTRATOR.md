@@ -10,6 +10,8 @@
 6. [Wartung](#6-wartung)
 7. [Monitoring](#7-monitoring)
 8. [Sicherheit](#8-sicherheit)
+9. [Banking-Administration](#9-banking-administration)
+10. [Machine Learning](#10-machine-learning)
 
 ---
 
@@ -427,6 +429,93 @@ HolzbauERP unterstützt:
 - **DSGVO:** Datenschutz-Grundverordnung
 - **GoBD:** Grundsätze ordnungsmäßiger Buchführung
 - **Revisionssicherheit:** Unveränderbare Protokolle
+- **PSD2:** Payment Services Directive für Banking
+
+---
+
+## 9. Banking-Administration
+
+### 9.1 FinTS/HBCI-Konfiguration
+
+Die Banking-Integration nutzt FinTS 3.0 für sichere Bankverbindungen.
+
+#### Unterstützte TAN-Verfahren
+- PushTAN / AppTAN
+- SMS-TAN
+- ChipTAN (manuell)
+- PhotoTAN
+
+#### Bank-Credentials
+Zugangsdaten werden verschlüsselt in der Datenbank gespeichert (AES-256).
+
+### 9.2 Bankkonten verwalten
+
+Pfad: `Finanzen → Banking → Konten`
+
+**Konto hinzufügen:**
+1. Bank aus Liste wählen (2.000+ deutsche Banken)
+2. Zugangsdaten eingeben
+3. TAN-Verfahren auswählen
+4. Verbindung testen
+
+**Konto synchronisieren:**
+- Automatisch: Täglich um 6:00 Uhr
+- Manuell: "Jetzt synchronisieren" klicken
+
+### 9.3 Transaktionsabgleich
+
+Automatischer Abgleich von Transaktionen mit offenen Rechnungen:
+1. System prüft Verwendungszweck
+2. Matching-Score wird berechnet
+3. Transaktionen werden vorgeschlagen
+4. Administrator bestätigt Zuordnung
+
+### 9.4 Sicherheitshinweise
+
+- Zugangsdaten werden nie im Klartext gespeichert
+- TLS 1.3 für alle Bankverbindungen
+- Session-Tokens verfallen nach 5 Minuten
+- Audit-Log für alle Banking-Aktionen
+
+---
+
+## 10. Machine Learning
+
+### 10.1 ML-Services verwalten
+
+Pfad: `Einstellungen → ML-Services`
+
+#### Verfügbare Modelle
+
+| Modell | Beschreibung | Datenvoraussetzung |
+|--------|--------------|-------------------|
+| Kostenprognose | Projektkosten vorhersagen | Mind. 20 abgeschlossene Projekte |
+| Mängelrisiko | Qualitätsprobleme erkennen | Mind. 50 Mängeldatensätze |
+| Kundenwert | Customer Lifetime Value | Mind. 30 Kunden mit Historie |
+| Lieferzeit | Optimale Bestellzeitpunkte | Mind. 100 Lieferungen |
+
+### 10.2 Modelle trainieren
+
+1. Einstellungen → ML-Services → Training
+2. Modell auswählen
+3. Trainingsdaten prüfen
+4. "Training starten" klicken
+5. Nach Abschluss: Modell-Performance anzeigen
+
+### 10.3 Empfehlungen konfigurieren
+
+| Einstellung | Beschreibung | Standard |
+|-------------|--------------|----------|
+| Auto-Empfehlungen | Automatische Vorschläge | Ein |
+| Konfidenz-Schwelle | Min. Konfidenz für Anzeige | 70% |
+| Benachrichtigungen | Bei hohem Risiko warnen | Ein |
+
+### 10.4 Datenschutz
+
+- ML-Modelle laufen lokal
+- Keine Daten an externe Server
+- Mandantentrennung bei Training
+- Modelle können gelöscht werden
 
 ---
 
@@ -447,6 +536,8 @@ HolzbauERP unterstützt:
 - [ ] Benutzerkonten überprüfen (inaktive deaktivieren)
 - [ ] Berechtigungen auditieren
 - [ ] Datenbank optimieren
+- [ ] ML-Modelle überprüfen
+- [ ] Banking-Synchronisation prüfen
 
 **Jährlich:**
 - [ ] Passwörter zurücksetzen lassen
