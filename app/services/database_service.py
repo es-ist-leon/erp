@@ -54,8 +54,13 @@ class DatabaseService:
     
     def _get_ssl_args(self):
         """Get SSL configuration for database connections"""
-        ca_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-                               "certs", "ca-certificate.crt")
+        import sys
+        if getattr(sys, 'frozen', False):
+            base_dir = sys._MEIPASS
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        ca_path = os.path.join(base_dir, "certs", "ca-certificate.crt")
         if os.path.exists(ca_path):
             return {"sslmode": "require", "sslrootcert": ca_path}
         return {"sslmode": "require"}

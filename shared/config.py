@@ -7,6 +7,17 @@ Supports two databases:
 from functools import lru_cache
 from typing import Optional
 import os
+import sys
+
+
+def get_base_path():
+    """Get the base path for resources - works for both dev and PyInstaller"""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled EXE
+        return sys._MEIPASS
+    else:
+        # Running in development
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class DatabaseConfig:
@@ -92,7 +103,7 @@ class Settings:
     
     def _load_credentials(self):
         """Load database credentials from files"""
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = get_base_path()
         
         # Load auth database (useraccs) from dbcredentials.txt.txt
         auth_paths = [
