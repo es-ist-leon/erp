@@ -186,6 +186,9 @@ class DatabaseService:
             self.master_engine = self.user_engine
             self.MasterSessionLocal = self.UserSessionLocal
             
+            # Run migrations to add any missing columns
+            self._run_migrations(self.user_engine)
+            
             return True
             
         except Exception as e:
@@ -204,7 +207,8 @@ class DatabaseService:
             Material, Supplier, Warehouse, WarehouseLocation, StockLevel,
             Employee, TimeEntry, Absence, Certification,
             Quote, QuoteItem, Order, OrderItem,
-            Invoice, InvoiceItem, Payment
+            Invoice, InvoiceItem, Payment,
+            BankAccount, BankTransaction, LedgerAccount
         )
         
         # Create all tables at once - SQLAlchemy handles FK ordering
@@ -242,6 +246,10 @@ class DatabaseService:
             ("tenants", "city", "VARCHAR(100)"),
             ("tenants", "country", "VARCHAR(100) DEFAULT 'Deutschland'"),
             ("users", "database_name", "VARCHAR(100)"),
+            # Bank account columns
+            ("bank_accounts", "provider", "VARCHAR(50) DEFAULT 'manual'"),
+            ("bank_accounts", "credentials_encrypted", "TEXT"),
+            ("bank_accounts", "balance", "NUMERIC(15,2) DEFAULT 0"),
         ]
         
         with engine.connect() as conn:

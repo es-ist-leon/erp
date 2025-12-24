@@ -287,6 +287,7 @@ class Sidebar(QFrame):
         nav_layout.addWidget(system_label)
         
         system_items = [
+            ("🤖", "ML Insights", "ml_insights"),
             ("📈", "Telemetrie", "telemetry"),
             ("⚙️", "Einstellungen", "settings"),
             ("❓", "Hilfe & Support", "help"),

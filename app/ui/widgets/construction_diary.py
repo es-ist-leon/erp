@@ -15,8 +15,11 @@ from PyQt6.QtGui import QFont, QColor, QPixmap, QIcon
 from datetime import datetime, date, time
 from decimal import Decimal
 import json
+import uuid
 
+from sqlalchemy import select
 from app.ui.styles import COLORS, get_button_style, CARD_STYLE
+from shared.models import ConstructionDiary, Project, WeatherCondition
 
 
 class ConstructionDiaryWidget(QWidget):
@@ -936,22 +939,211 @@ class ConstructionDiaryWidget(QWidget):
     
     # Event handlers
     def _on_project_changed(self, index):
-        pass
+        """Wird aufgerufen wenn ein Projekt ausgewählt wird"""
+        project_id = self.project_combo.currentData()
+        if project_id:
+            self.current_project = uuid.UUID(project_id)
+            self.current_entry = None
+            self._load_entries()
+        else:
+            self.current_project = None
+            self.entry_tree.clear()
     
     def _filter_entries(self, text):
-        pass
+        """Filtert Einträge nach Suchtext"""
+        for i in range(self.entry_tree.topLevelItemCount()):
+            item = self.entry_tree.topLevelItem(i)
+            if item:
+                visible = text.lower() in item.text(0).lower() or text.lower() in item.text(1).lower()
+                item.setHidden(not visible)
     
     def _on_entry_selected(self, item):
-        pass
+        """Lädt einen ausgewählten Eintrag"""
+        entry_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if not entry_id:
+            return
+        
+        session = self.db_service.get_session()
+        try:
+            diary = session.get(ConstructionDiary, uuid.UUID(entry_id))
+            if diary:
+                self.current_entry = diary.id
+                self.entry_number.setText(diary.diary_number or "")
+                
+                if diary.diary_date:
+                    self.entry_date.setDate(QDate(diary.diary_date.year, diary.diary_date.month, diary.diary_date.day))
+                
+                if diary.work_start_time:
+                    self.work_start.setTime(QTime(diary.work_start_time.hour, diary.work_start_time.minute))
+                if diary.work_end_time:
+                    self.work_end.setTime(QTime(diary.work_end_time.hour, diary.work_end_time.minute))
+                
+                self.break_duration.setValue(diary.break_duration_minutes or 0)
+                self.workable.setChecked(diary.work_possible if diary.work_possible is not None else True)
+                
+                self.progress_notes.setPlainText(diary.work_performed or "")
+                self.site_manager_name.setText(diary.site_manager_signature or "")
+                
+                status_map = {"draft": 0, "submitted": 1, "approved": 2}
+                self.entry_status.setCurrentIndex(status_map.get(diary.status, 0))
+        finally:
+            session.close()
     
     def _new_entry(self):
-        QMessageBox.information(self, "Neuer Eintrag", "Neuer Bautagebuch-Eintrag wird erstellt...")
+        """Erstellt einen neuen Bautagebuch-Eintrag"""
+        if not self.current_project:
+            QMessageBox.warning(self, "Fehler", "Bitte wählen Sie zuerst ein Projekt aus.")
+            return
+        
+        self.current_entry = None
+        self.entry_number.setText("")
+        self.entry_date.setDate(QDate.currentDate())
+        self.work_start.setTime(QTime(7, 0))
+        self.work_end.setTime(QTime(16, 30))
+        self.break_duration.setValue(30)
+        self.workable.setChecked(True)
+        self.progress_notes.clear()
+        self.site_manager_name.clear()
+        self.entry_status.setCurrentIndex(0)
+        
+        QMessageBox.information(self, "Neuer Eintrag", "Neuer Bautagebuch-Eintrag wurde vorbereitet. Füllen Sie die Felder aus und klicken Sie auf Speichern.")
     
     def _export_pdf(self):
-        QMessageBox.information(self, "PDF Export", "Bautagebuch wird als PDF exportiert...")
+        """Exportiert das Bautagebuch als PDF"""
+        if not self.current_project:
+            QMessageBox.warning(self, "Fehler", "Bitte wählen Sie zuerst ein Projekt aus.")
+            return
+        
+        from PyQt6.QtWidgets import QFileDialog
+        from shared.services.export_service import ExportService
+        
+        # Datei-Dialog
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "PDF speichern",
+            f"Bautagebuch_{self.current_project.project_number}_{datetime.now().strftime('%Y%m%d')}.pdf",
+            "PDF Dateien (*.pdf)"
+        )
+        
+        if not filename:
+            return
+        
+        try:
+            # Einträge laden
+            session = self.db_service.get_session()
+            entries = session.execute(
+                select(ConstructionDiary)
+                .where(ConstructionDiary.project_id == self.current_project.id)
+                .where(ConstructionDiary.is_deleted == False)
+                .order_by(ConstructionDiary.entry_date.desc())
+            ).scalars().all()
+            session.close()
+            
+            # Export
+            ExportService.export_construction_diary_pdf(
+                entries=entries,
+                project_name=f"{self.current_project.project_number} - {self.current_project.name}",
+                filename=filename
+            )
+            
+            QMessageBox.information(self, "Erfolg", f"PDF wurde erstellt:\n{filename}")
+            
+            # PDF öffnen
+            import os
+            os.startfile(filename)
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Export fehlgeschlagen: {e}")
     
     def _save_entry(self):
-        QMessageBox.information(self, "Gespeichert", "Bautagebuch-Eintrag wurde gespeichert.")
+        """Speichert den Bautagebuch-Eintrag in die Datenbank"""
+        if not self.current_project:
+            QMessageBox.warning(self, "Fehler", "Bitte wählen Sie zuerst ein Projekt aus.")
+            return
+        
+        session = self.db_service.get_session()
+        try:
+            # Neuen Eintrag erstellen oder bestehenden bearbeiten
+            if self.current_entry:
+                diary = session.get(ConstructionDiary, self.current_entry)
+            else:
+                diary = ConstructionDiary()
+                diary.id = uuid.uuid4()
+                # Generiere Tagebuchnummer
+                from sqlalchemy import func
+                count = session.execute(select(func.count(ConstructionDiary.id))).scalar() or 0
+                diary.diary_number = f"BT{datetime.now().year}{count + 1:05d}"
+                diary.project_id = self.current_project
+                if self.user and hasattr(self.user, 'tenant_id'):
+                    diary.tenant_id = self.user.tenant_id
+            
+            # Datum
+            diary.diary_date = self.entry_date.date().toPyDate()
+            diary.calendar_week = diary.diary_date.isocalendar()[1]
+            
+            # Arbeitszeiten
+            diary.work_start_time = self.work_start.time().toPyTime()
+            diary.work_end_time = self.work_end.time().toPyTime()
+            diary.break_duration_minutes = self.break_duration.value()
+            diary.work_possible = self.workable.isChecked()
+            
+            # Wetter-Mapping
+            weather_map = {
+                "Sonnig": WeatherCondition.SUNNY,
+                "Leicht bewölkt": WeatherCondition.PARTLY_CLOUDY,
+                "Bewölkt": WeatherCondition.CLOUDY,
+                "Stark bewölkt": WeatherCondition.OVERCAST,
+                "Nebel": WeatherCondition.FOG,
+                "Leichter Regen": WeatherCondition.LIGHT_RAIN,
+                "Regen": WeatherCondition.RAIN,
+                "Starkregen": WeatherCondition.HEAVY_RAIN,
+                "Gewitter": WeatherCondition.THUNDERSTORM,
+                "Schneefall": WeatherCondition.SNOW,
+                "Hagel": WeatherCondition.HAIL,
+                "Frost": WeatherCondition.FROST,
+            }
+            
+            # Wetter morgens
+            morning_condition = self.weather_morning_condition.currentText()
+            diary.weather_morning = weather_map.get(morning_condition)
+            diary.temperature_morning = str(self.weather_morning_temp.value()) if self.weather_morning_temp.value() != 0 else None
+            
+            # Wetter nachmittags
+            noon_condition = self.weather_noon_condition.currentText()
+            diary.weather_afternoon = weather_map.get(noon_condition)
+            diary.temperature_afternoon = str(self.weather_noon_temp.value()) if self.weather_noon_temp.value() != 0 else None
+            
+            # Personal
+            diary.own_workers_count = self.own_personnel_table.rowCount()
+            diary.subcontractor_workers_count = self.subcontractor_table.rowCount()
+            diary.total_workers = diary.own_workers_count + diary.subcontractor_workers_count
+            
+            # Arbeitsfortschritt (Notizen)
+            diary.work_performed = self.progress_notes.toPlainText().strip() or None
+            
+            # Status
+            status_map = {"Entwurf": "draft", "Abgeschlossen": "submitted", "Geprüft": "approved", "Freigegeben": "approved"}
+            diary.status = status_map.get(self.entry_status.currentText(), "draft")
+            
+            # Unterschriften
+            diary.site_manager_signature = self.site_manager_name.text().strip() or None
+            if diary.site_manager_signature:
+                diary.site_manager_signed_at = datetime.now()
+            
+            if not self.current_entry:
+                session.add(diary)
+            
+            session.commit()
+            self.current_entry = diary.id
+            self.entry_number.setText(diary.diary_number)
+            QMessageBox.information(self, "Gespeichert", "Bautagebuch-Eintrag wurde erfolgreich gespeichert.")
+            self._load_entries()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
     
     def _add_own_personnel(self):
         pass
@@ -997,5 +1189,52 @@ class ConstructionDiaryWidget(QWidget):
         pass
     
     def refresh(self):
-        """Refresh data"""
-        pass
+        """Refresh data - Lädt Projekte und Einträge"""
+        self._load_projects()
+        if self.current_project:
+            self._load_entries()
+    
+    def _load_projects(self):
+        """Lädt alle Projekte in die Combobox"""
+        session = self.db_service.get_session()
+        try:
+            self.project_combo.clear()
+            self.project_combo.addItem("-- Projekt wählen --", None)
+            
+            query = select(Project).where(Project.is_deleted == False).order_by(Project.project_number.desc())
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(Project.tenant_id == self.user.tenant_id)
+            
+            projects = session.execute(query).scalars().all()
+            for p in projects:
+                self.project_combo.addItem(f"{p.project_number} - {p.name}", str(p.id))
+        finally:
+            session.close()
+    
+    def _load_entries(self):
+        """Lädt alle Bautagebuch-Einträge für das aktuelle Projekt"""
+        if not self.current_project:
+            return
+        
+        session = self.db_service.get_session()
+        try:
+            self.entry_tree.clear()
+            
+            query = select(ConstructionDiary).where(
+                ConstructionDiary.project_id == self.current_project,
+                ConstructionDiary.is_deleted == False
+            ).order_by(ConstructionDiary.diary_date.desc())
+            
+            entries = session.execute(query).scalars().all()
+            
+            status_names = {"draft": "Entwurf", "submitted": "Abgeschlossen", "approved": "Freigegeben"}
+            
+            for entry in entries:
+                item = QTreeWidgetItem([
+                    entry.diary_date.strftime("%d.%m.%Y") if entry.diary_date else "",
+                    status_names.get(entry.status, entry.status or "")
+                ])
+                item.setData(0, Qt.ItemDataRole.UserRole, str(entry.id))
+                self.entry_tree.addTopLevelItem(item)
+        finally:
+            session.close()

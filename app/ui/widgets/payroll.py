@@ -323,26 +323,8 @@ class PayrollWidget(QWidget):
         self.payslips_table.horizontalHeader().setStretchLastSection(True)
         self.payslips_table.setStyleSheet(self._table_style())
         
-        # Beispieldaten
-        sample_data = [
-            ("2025-12-001", "Max Mustermann", "M001", "4.500,00", "850,50", "720,00", "2.929,50", "5.392,50", "Berechnet"),
-            ("2025-12-002", "Erika Muster", "M002", "3.800,00", "718,20", "580,00", "2.501,80", "4.546,20", "Entwurf"),
-            ("2025-12-003", "Hans Beispiel", "M003", "3.200,00", "604,80", "420,00", "2.175,20", "3.828,80", "Berechnet"),
-        ]
-        
-        self.payslips_table.setRowCount(len(sample_data))
-        for row, data in enumerate(sample_data):
-            for col, value in enumerate(data):
-                item = QTableWidgetItem(value)
-                if col in [3, 4, 5, 6, 7]:  # Geldbeträge
-                    item.setText(f"€ {value}")
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                if col == 8:  # Status
-                    if value == "Berechnet":
-                        item.setForeground(QColor("#10b981"))
-                    elif value == "Entwurf":
-                        item.setForeground(QColor("#f59e0b"))
-                self.payslips_table.setItem(row, col, item)
+        # Daten aus Datenbank laden
+        self._load_payslips_data()
         
         layout.addWidget(self.payslips_table)
         
@@ -405,27 +387,8 @@ class PayrollWidget(QWidget):
         ])
         self.employees_table.setStyleSheet(self._table_style())
         
-        # Beispieldaten
-        employees = [
-            ("M001", "Max Mustermann", "Produktion", "Zimmerer", "01.03.2020", "40", "4.500,00", "1", "Aktiv"),
-            ("M002", "Erika Muster", "Verwaltung", "Buchhaltung", "15.06.2018", "40", "3.800,00", "3", "Aktiv"),
-            ("M003", "Hans Beispiel", "Montage", "Monteur", "01.09.2021", "40", "3.200,00", "1", "Aktiv"),
-            ("M004", "Anna Test", "Planung", "Bauzeichnerin", "01.01.2023", "30", "2.400,00", "4", "Teilzeit"),
-        ]
-        
-        self.employees_table.setRowCount(len(employees))
-        for row, data in enumerate(employees):
-            for col, value in enumerate(data):
-                item = QTableWidgetItem(value)
-                if col == 6:  # Gehalt
-                    item.setText(f"€ {value}")
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                if col == 8:  # Status
-                    if value == "Aktiv":
-                        item.setForeground(QColor("#10b981"))
-                    elif value == "Teilzeit":
-                        item.setForeground(QColor("#3b82f6"))
-                self.employees_table.setItem(row, col, item)
+        # Daten aus Datenbank laden
+        self._load_employees_table_data()
         
         layout.addWidget(self.employees_table)
         
@@ -921,6 +884,58 @@ class PayrollWidget(QWidget):
     
     # === AKTIONEN ===
     
+    def _load_payslips_data(self):
+        """Lädt Lohnabrechnungen aus der Datenbank"""
+        try:
+            # Leere Tabelle für neue Daten
+            self.payslips_table.setRowCount(0)
+            # Echte Daten würden hier aus der DB geladen
+        except Exception as e:
+            print(f"Fehler beim Laden der Lohnabrechnungen: {e}")
+    
+    def _load_employees_table_data(self):
+        """Lädt Mitarbeiter aus der Datenbank"""
+        try:
+            from app.models.employee import Employee
+            employees = self.db_service.get_session().query(Employee).filter(
+                Employee.is_deleted == False
+            ).all()
+            
+            self.employees_table.setRowCount(len(employees))
+            for row, emp in enumerate(employees):
+                # Pers.-Nr.
+                self.employees_table.setItem(row, 0, QTableWidgetItem(emp.employee_number or ""))
+                # Name
+                name = f"{emp.first_name or ''} {emp.last_name or ''}".strip()
+                self.employees_table.setItem(row, 1, QTableWidgetItem(name))
+                # Abteilung
+                self.employees_table.setItem(row, 2, QTableWidgetItem(emp.department or ""))
+                # Position
+                self.employees_table.setItem(row, 3, QTableWidgetItem(emp.position or ""))
+                # Eintrittsdatum
+                entry = emp.entry_date.strftime("%d.%m.%Y") if emp.entry_date else ""
+                self.employees_table.setItem(row, 4, QTableWidgetItem(entry))
+                # Stunden/Woche
+                hours = str(emp.weekly_hours) if emp.weekly_hours else "40"
+                self.employees_table.setItem(row, 5, QTableWidgetItem(hours))
+                # Gehalt
+                salary = f"€ {emp.salary:,.2f}" if emp.salary else ""
+                item = QTableWidgetItem(salary)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self.employees_table.setItem(row, 6, item)
+                # Steuerklasse
+                self.employees_table.setItem(row, 7, QTableWidgetItem(str(emp.tax_class) if emp.tax_class else ""))
+                # Status
+                status = emp.employment_status or "Aktiv"
+                status_item = QTableWidgetItem(status)
+                if status == "Aktiv":
+                    status_item.setForeground(QColor("#10b981"))
+                elif status == "Teilzeit":
+                    status_item.setForeground(QColor("#3b82f6"))
+                self.employees_table.setItem(row, 8, status_item)
+        except Exception as e:
+            print(f"Fehler beim Laden der Mitarbeiter: {e}")
+    
     def start_payroll_run(self):
         """Startet den Lohnlauf"""
         QMessageBox.information(self, "Lohnlauf", "Lohnlauf wird gestartet...")
@@ -991,15 +1006,11 @@ class PayslipDialog(QDialog):
         employee_form = QFormLayout(employee_group)
         
         self.employee_combo = QComboBox()
-        self.employee_combo.addItems([
-            "Max Mustermann (M001)",
-            "Erika Muster (M002)",
-            "Hans Beispiel (M003)",
-        ])
+        self._load_employees_combo()
         employee_form.addRow("Mitarbeiter:", self.employee_combo)
         
         self.period_combo = QComboBox()
-        self.period_combo.addItems(["Dezember 2025", "November 2025"])
+        self._load_periods_combo()
         employee_form.addRow("Abrechnungsperiode:", self.period_combo)
         
         layout.addWidget(employee_group)
@@ -1076,6 +1087,30 @@ class PayslipDialog(QDialog):
         
         layout.addLayout(buttons_layout)
     
+    def _load_employees_combo(self):
+        """Lädt Mitarbeiter in Combobox"""
+        try:
+            from app.models.employee import Employee
+            employees = self.db_service.get_session().query(Employee).filter(
+                Employee.is_deleted == False
+            ).all()
+            for emp in employees:
+                name = f"{emp.first_name or ''} {emp.last_name or ''} ({emp.employee_number or ''})".strip()
+                self.employee_combo.addItem(name, emp.id)
+        except Exception as e:
+            print(f"Fehler beim Laden der Mitarbeiter: {e}")
+    
+    def _load_periods_combo(self):
+        """Lädt Abrechnungsperioden"""
+        from datetime import datetime
+        now = datetime.now()
+        months = ["Januar", "Februar", "März", "April", "Mai", "Juni", 
+                  "Juli", "August", "September", "Oktober", "November", "Dezember"]
+        for i in range(6):
+            month_idx = (now.month - 1 - i) % 12
+            year = now.year if (now.month - i) > 0 else now.year - 1
+            self.period_combo.addItem(f"{months[month_idx]} {year}")
+    
     def calculate(self):
         """Berechnet die Lohnabrechnung"""
         # Beispielberechnung
@@ -1107,12 +1142,8 @@ class BonusDialog(QDialog):
         form = QFormLayout()
         
         self.employee_combo = QComboBox()
-        self.employee_combo.addItems([
-            "Alle Mitarbeiter",
-            "Max Mustermann (M001)",
-            "Erika Muster (M002)",
-            "Hans Beispiel (M003)",
-        ])
+        self.employee_combo.addItem("Alle Mitarbeiter", None)
+        self._load_employees_combo()
         form.addRow("Mitarbeiter:", self.employee_combo)
         
         self.bonus_type = QComboBox()
@@ -1175,3 +1206,16 @@ class BonusDialog(QDialog):
         """Speichert die Sonderzahlung"""
         QMessageBox.information(self, "Erfolg", "Sonderzahlung wurde erfasst!")
         self.accept()
+    
+    def _load_employees_combo(self):
+        """Lädt Mitarbeiter in Combobox"""
+        try:
+            from app.models.employee import Employee
+            employees = self.db_service.get_session().query(Employee).filter(
+                Employee.is_deleted == False
+            ).all()
+            for emp in employees:
+                name = f"{emp.first_name or ''} {emp.last_name or ''} ({emp.employee_number or ''})".strip()
+                self.employee_combo.addItem(name, emp.id)
+        except Exception as e:
+            print(f"Fehler beim Laden der Mitarbeiter: {e}")

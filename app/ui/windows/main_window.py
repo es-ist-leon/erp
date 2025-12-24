@@ -146,6 +146,11 @@ class MainWindow(QMainWindow):
         """Preload dashboard widget"""
         from app.ui.widgets.dashboard import DashboardWidget
         self.pages["dashboard"] = DashboardWidget(self.db_service, self.user)
+        # Connect quick action signals
+        self.pages["dashboard"].open_customer_dialog.connect(self._open_customer_dialog)
+        self.pages["dashboard"].open_project_dialog.connect(self._open_project_dialog)
+        self.pages["dashboard"].open_quote_dialog.connect(self._open_quote_dialog)
+        self.pages["dashboard"].open_invoice_dialog.connect(self._open_invoice_dialog)
         self.stack.addWidget(self.pages["dashboard"])
         self.navigate_to("dashboard")
     
@@ -524,6 +529,9 @@ class MainWindow(QMainWindow):
         elif page_name == "telemetry":
             from app.ui.widgets.telemetry_dashboard import TelemetryDashboard
             widget = TelemetryDashboard(self.db_service, self.user)
+        elif page_name == "ml_insights":
+            from app.ui.widgets.ml_insights import MLInsightsWidget
+            widget = MLInsightsWidget(self.db_service, self.user)
         elif page_name == "settings":
             from app.ui.widgets.settings import SettingsWidget
             widget = SettingsWidget(self.db_service, self.user)
@@ -623,6 +631,38 @@ class MainWindow(QMainWindow):
                     
         except Exception as e:
             print(f"Error opening entity editor: {e}")
+    
+    def _open_customer_dialog(self):
+        """Öffnet Kunden-Dialog für Schnellaktion"""
+        from app.ui.dialogs.customer_dialog import CustomerDialog
+        dialog = CustomerDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            if "customers" in self.pages and hasattr(self.pages["customers"], 'refresh'):
+                self.pages["customers"].refresh()
+    
+    def _open_project_dialog(self):
+        """Öffnet Projekt-Dialog für Schnellaktion"""
+        from app.ui.dialogs.project_dialog import ProjectDialog
+        dialog = ProjectDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            if "projects" in self.pages and hasattr(self.pages["projects"], 'refresh'):
+                self.pages["projects"].refresh()
+    
+    def _open_quote_dialog(self):
+        """Öffnet Angebots-Dialog für Schnellaktion"""
+        from app.ui.dialogs.quote_dialog import QuoteDialog
+        dialog = QuoteDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            if "orders" in self.pages and hasattr(self.pages["orders"], 'refresh'):
+                self.pages["orders"].refresh()
+    
+    def _open_invoice_dialog(self):
+        """Öffnet Rechnungs-Dialog für Schnellaktion"""
+        from app.ui.dialogs.invoice_dialog import InvoiceDialog
+        dialog = InvoiceDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            if "invoices" in self.pages and hasattr(self.pages["invoices"], 'refresh'):
+                self.pages["invoices"].refresh()
     
     def closeEvent(self, event):
         """Handle window close"""

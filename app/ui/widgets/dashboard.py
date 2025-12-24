@@ -3,9 +3,10 @@ Dashboard Widget - Material Design 3
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, 
-    QGridLayout, QScrollArea, QSizePolicy, QGraphicsDropShadowEffect
+    QGridLayout, QScrollArea, QSizePolicy, QGraphicsDropShadowEffect,
+    QPushButton
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 from sqlalchemy import select, func
 from datetime import date, timedelta, datetime
@@ -115,6 +116,12 @@ class StatCard(QFrame):
 
 class DashboardWidget(QWidget):
     """Material Design Dashboard"""
+    
+    # Signals for quick actions
+    open_customer_dialog = pyqtSignal()
+    open_project_dialog = pyqtSignal()
+    open_quote_dialog = pyqtSignal()
+    open_invoice_dialog = pyqtSignal()
     
     def __init__(self, db_service, user=None):
         super().__init__()
@@ -235,43 +242,36 @@ class DashboardWidget(QWidget):
         actions_layout.setSpacing(16)
         
         quick_actions = [
-            ("➕ Neuer Kunde", MATERIAL_COLORS['primary']),
-            ("📝 Neues Projekt", MATERIAL_COLORS['secondary']),
-            ("📄 Neues Angebot", MATERIAL_COLORS['tertiary']),
-            ("📋 Neue Rechnung", MATERIAL_COLORS['success']),
+            ("➕ Neuer Kunde", MATERIAL_COLORS['primary'], self._on_new_customer),
+            ("📝 Neues Projekt", MATERIAL_COLORS['secondary'], self._on_new_project),
+            ("📄 Neues Angebot", MATERIAL_COLORS['tertiary'], self._on_new_quote),
+            ("📋 Neue Rechnung", MATERIAL_COLORS['success'], self._on_new_invoice),
         ]
         
-        for text, color in quick_actions:
-            btn_frame = QFrame()
-            btn_frame.setStyleSheet(f"""
-                QFrame {{
+        for text, color, handler in quick_actions:
+            btn = QPushButton(text)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
                     background: {MATERIAL_COLORS['surface']};
                     border: 1px solid {MATERIAL_COLORS['outline_variant']};
                     border-radius: {CORNER_RADIUS['medium']};
                     padding: 16px 24px;
+                    color: {color};
+                    font-size: 14px;
+                    font-weight: 500;
+                    font-family: 'Roboto';
                 }}
-                QFrame:hover {{
+                QPushButton:hover {{
                     background: {MATERIAL_COLORS['surface_container_low']};
                     border-color: {color};
                 }}
+                QPushButton:pressed {{
+                    background: {MATERIAL_COLORS['surface_container']};
+                }}
             """)
-            btn_frame.setCursor(Qt.CursorShape.PointingHandCursor)
-            
-            btn_layout = QVBoxLayout(btn_frame)
-            btn_layout.setContentsMargins(16, 12, 16, 12)
-            
-            btn_label = QLabel(text)
-            btn_label.setStyleSheet(f"""
-                color: {color};
-                font-size: 14px;
-                font-weight: 500;
-                font-family: 'Roboto';
-                background: transparent;
-            """)
-            btn_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            btn_layout.addWidget(btn_label)
-            
-            actions_layout.addWidget(btn_frame)
+            btn.clicked.connect(handler)
+            actions_layout.addWidget(btn)
         
         actions_layout.addStretch()
         layout.addLayout(actions_layout)
@@ -306,14 +306,15 @@ class DashboardWidget(QWidget):
             with self.db.session_scope() as session:
                 from sqlalchemy import text
                 
-                # Single optimized query for all counts - much faster than 6 separate queries
+                # Simplified query without enum filtering to avoid enum type issues
+                # Count all non-deleted projects instead of filtering by status
                 stats_query = text("""
                     SELECT 
                         (SELECT COUNT(*) FROM customers WHERE is_deleted = false) as customer_count,
-                        (SELECT COUNT(*) FROM projects WHERE is_deleted = false AND status IN ('planning', 'in_progress')) as project_count,
-                        (SELECT COUNT(*) FROM quotes WHERE is_deleted = false AND status IN ('draft', 'sent')) as quote_count,
+                        (SELECT COUNT(*) FROM projects WHERE is_deleted = false) as project_count,
+                        (SELECT COUNT(*) FROM quotes WHERE is_deleted = false) as quote_count,
                         (SELECT COUNT(*) FROM orders WHERE is_deleted = false) as order_count,
-                        (SELECT COUNT(*) FROM invoices WHERE is_deleted = false AND status IN ('draft', 'sent')) as invoice_count,
+                        (SELECT COUNT(*) FROM invoices WHERE is_deleted = false) as invoice_count,
                         (SELECT COUNT(*) FROM employees WHERE is_deleted = false) as employee_count
                 """)
                 
@@ -335,8 +336,9 @@ class DashboardWidget(QWidget):
                         for key, value in stats.items():
                             self.stat_cards[key].set_value(str(value))
                         return
-                except Exception:
-                    pass  # Fall back to individual queries if combined query fails
+                except Exception as e:
+                    session.rollback()
+                    print(f"Combined dashboard stats query failed, falling back: {e}")  # Fall back to individual queries if combined query fails
                 
                 # Fallback: Individual queries (for compatibility)
                 stats = {}
@@ -390,3 +392,19 @@ class DashboardWidget(QWidget):
                     
         except Exception as e:
             print(f"Error loading dashboard statistics: {e}")
+    
+    def _on_new_customer(self):
+        """Öffnet Kunden-Dialog"""
+        self.open_customer_dialog.emit()
+    
+    def _on_new_project(self):
+        """Öffnet Projekt-Dialog"""
+        self.open_project_dialog.emit()
+    
+    def _on_new_quote(self):
+        """Öffnet Angebots-Dialog"""
+        self.open_quote_dialog.emit()
+    
+    def _on_new_invoice(self):
+        """Öffnet Rechnungs-Dialog"""
+        self.open_invoice_dialog.emit()

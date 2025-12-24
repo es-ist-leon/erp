@@ -1336,6 +1336,35 @@ def create_new_tables(cursor):
     """)
     print("  + Created certificates table")
 
+def migrate_bank_accounts(cursor):
+    """Add new columns to bank_accounts table"""
+    print("\n📋 Migrating bank_accounts table...")
+    
+    # Check if table exists
+    cursor.execute("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_name = 'bank_accounts'
+        )
+    """)
+    if not cursor.fetchone()[0]:
+        print("  ⚠ bank_accounts table does not exist - will be created by SQLAlchemy")
+        return
+    
+    columns = [
+        ('provider', 'VARCHAR(50)', 'manual'),
+        ('credentials_encrypted', 'TEXT', None),
+        ('balance', 'DECIMAL(15,2)', '0'),
+    ]
+    
+    added = 0
+    for col_name, col_type, default in columns:
+        if add_column_if_not_exists(cursor, 'bank_accounts', col_name, col_type, default):
+            added += 1
+    
+    print(f"  ✓ Bank Accounts: {added} columns added")
+
+
 def create_telemetry_tables(cursor):
     """Create telemetry tables"""
     print("\n📋 Creating telemetry tables...")
@@ -1726,6 +1755,7 @@ def main():
         migrate_orders(cursor)
         migrate_inventory(cursor)
         migrate_materials(cursor)
+        migrate_bank_accounts(cursor)
         create_new_tables(cursor)
         create_telemetry_tables(cursor)
         

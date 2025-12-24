@@ -116,8 +116,69 @@ class BankAccount(Base, TimestampMixin, SoftDeleteMixin, TenantMixin, AuditMixin
     tags = Column(ARRAY(String), default=list)
     custom_fields = Column(JSONB, default=dict)
     
+    # FinTS/HBCI Online-Banking
+    provider = Column(String(50), default="manual")  # fints, manual
+    credentials_encrypted = Column(Text, nullable=True)  # Verschlüsselte Zugangsdaten
+    balance = Column(Numeric(15, 2), default=0)  # Aktueller Kontostand (von FinTS)
+    
     # Relationships
     transactions = relationship("Payment", back_populates="bank_account")
+    bank_transactions = relationship("OnlineBankingTransaction", back_populates="account")
+
+
+# Alias für Banking-Service Kompatibilität
+BankAccountModel = BankAccount
+
+
+# =============================================================================
+# BANK-TRANSAKTIONEN (von Online-Banking/FinTS)
+# =============================================================================
+
+class OnlineBankingTransaction(Base, TimestampMixin, SoftDeleteMixin, TenantMixin, AuditMixin):
+    """Banktransaktion von Online-Banking Sync (FinTS/HBCI)"""
+    __tablename__ = "online_banking_transactions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey('bank_accounts.id'), nullable=False)
+    
+    # Datum
+    date = Column(Date, nullable=False, index=True)
+    value_date = Column(Date, nullable=True)
+    
+    # Betrag
+    amount = Column(Numeric(15, 2), nullable=False)
+    currency = Column(String(3), default="EUR")
+    
+    # Beschreibung
+    description = Column(Text, nullable=True)
+    booking_text = Column(String(255), nullable=True)
+    
+    # Partner
+    partner_name = Column(String(255), nullable=True)
+    partner_iban = Column(String(50), nullable=True)
+    
+    # Referenz
+    reference = Column(String(255), nullable=True)
+    
+    # Transaktionstyp
+    transaction_type = Column(String(20), nullable=False)  # CREDIT, DEBIT
+    
+    # Matching
+    is_matched = Column(Boolean, default=False)
+    matched_invoice_id = Column(UUID(as_uuid=True), ForeignKey('invoices.id'), nullable=True)
+    matched_payment_id = Column(UUID(as_uuid=True), ForeignKey('payments.id'), nullable=True)
+    
+    # Kategorie
+    category = Column(String(100), nullable=True)
+    
+    # Relationships
+    account = relationship("BankAccount", back_populates="bank_transactions")
+    matched_invoice = relationship("Invoice", foreign_keys=[matched_invoice_id])
+    matched_payment = relationship("Payment", foreign_keys=[matched_payment_id])
+
+
+# Alias für Banking-Service Kompatibilität
+BankTransactionModel = OnlineBankingTransaction
 
 
 # =============================================================================

@@ -470,6 +470,7 @@ class AccountingWidget(QWidget):
         
         pdf_btn = QPushButton("📄 PDF erstellen")
         pdf_btn.setStyleSheet(self._button_style().replace("#3b82f6", "#64748b"))
+        pdf_btn.clicked.connect(self._export_vat_pdf)
         actions_layout.addWidget(pdf_btn)
         
         actions_layout.addStretch()
@@ -812,6 +813,51 @@ class AccountingWidget(QWidget):
     def show_open_items(self):
         """Zeigt offene Posten"""
         QMessageBox.information(self, "Info", "Offene Posten werden angezeigt...")
+    
+    def _export_vat_pdf(self):
+        """Exportiert UStVA als PDF"""
+        from PyQt6.QtWidgets import QFileDialog
+        from shared.services.export_service import ExportService
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "UStVA speichern",
+            f"UStVA_{datetime.now().strftime('%Y%m')}.pdf",
+            "PDF Dateien (*.pdf)"
+        )
+        
+        if not filename:
+            return
+        
+        try:
+            columns = [
+                {"key": "kz", "label": "KZ", "width": 15},
+                {"key": "bezeichnung", "label": "Bezeichnung", "width": 80},
+                {"key": "betrag", "label": "Betrag", "width": 30},
+            ]
+            
+            # Beispiel-Daten (in Realität aus DB)
+            data = [
+                {"kz": "81", "bezeichnung": "Steuerpflichtige Umsätze 19%", "betrag": "€ 45.000,00"},
+                {"kz": "86", "bezeichnung": "Steuerpflichtige Umsätze 7%", "betrag": "€ 5.500,00"},
+                {"kz": "66", "bezeichnung": "Vorsteuer", "betrag": "€ 3.250,00"},
+                {"kz": "83", "bezeichnung": "Zahllast", "betrag": "€ 5.835,00"},
+            ]
+            
+            ExportService.export_to_pdf(
+                data=data,
+                columns=columns,
+                title="Umsatzsteuer-Voranmeldung",
+                subtitle=f"Zeitraum: {datetime.now().strftime('%B %Y')}",
+                filename=filename
+            )
+            
+            QMessageBox.information(self, "Erfolg", f"PDF wurde erstellt:\n{filename}")
+            import os
+            os.startfile(filename)
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Export fehlgeschlagen: {e}")
 
 
 class JournalEntryDialog(QDialog):

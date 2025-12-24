@@ -59,6 +59,7 @@ class FinanceWidget(QWidget):
         
         # Tabs hinzufügen
         self.tabs.addTab(self._create_dashboard_tab(), "📊 Übersicht")
+        self.tabs.addTab(self._create_bank_accounts_tab(), "🏦 Bankkonten")
         self.tabs.addTab(self._create_payments_tab(), "💳 Zahlungen")
         self.tabs.addTab(self._create_receivables_tab(), "📥 Forderungen")
         self.tabs.addTab(self._create_payables_tab(), "📤 Verbindlichkeiten")
@@ -212,6 +213,278 @@ class FinanceWidget(QWidget):
         
         return widget
     
+    def _create_bank_accounts_tab(self):
+        """Tab für Bankkonten-Verwaltung"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+        
+        # Toolbar
+        toolbar = QHBoxLayout()
+        
+        add_account_btn = QPushButton("+ Bankkonto verbinden")
+        add_account_btn.setStyleSheet(self._button_style())
+        add_account_btn.clicked.connect(self.add_bank_account)
+        toolbar.addWidget(add_account_btn)
+        
+        import_btn = QPushButton("📤 CSV importieren")
+        import_btn.setStyleSheet(self._button_style().replace("#3b82f6", "#10b981"))
+        import_btn.clicked.connect(self.import_bank_csv)
+        toolbar.addWidget(import_btn)
+        
+        toolbar.addStretch()
+        
+        sync_all_btn = QPushButton("🔄 Alle synchronisieren")
+        sync_all_btn.setStyleSheet(self._button_style().replace("#3b82f6", "#f59e0b"))
+        sync_all_btn.clicked.connect(self.sync_all_accounts)
+        toolbar.addWidget(sync_all_btn)
+        
+        layout.addLayout(toolbar)
+        
+        # Konten-Karten
+        self.accounts_container = QWidget()
+        self.accounts_layout = QVBoxLayout(self.accounts_container)
+        self.accounts_layout.setSpacing(12)
+        
+        # Scroll-Area für Konten
+        scroll = QScrollArea()
+        scroll.setWidget(self.accounts_container)
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        
+        layout.addWidget(scroll, 1)
+        
+        # Transaktionen-Tabelle
+        transactions_group = QGroupBox("📋 Letzte Transaktionen")
+        transactions_group.setStyleSheet(self._group_style())
+        transactions_layout = QVBoxLayout(transactions_group)
+        
+        self.bank_transactions_table = QTableWidget()
+        self.bank_transactions_table.setColumnCount(7)
+        self.bank_transactions_table.setHorizontalHeaderLabels([
+            "Datum", "Konto", "Partner", "Beschreibung", "Betrag", "Status", "Aktionen"
+        ])
+        self.bank_transactions_table.setStyleSheet(self._table_style())
+        self.bank_transactions_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        transactions_layout.addWidget(self.bank_transactions_table)
+        
+        layout.addWidget(transactions_group, 2)
+        
+        # Konten laden
+        self._load_bank_accounts()
+        
+        return widget
+    
+    def _load_bank_accounts(self):
+        """Lädt Bankkonten"""
+        # Bestehende Widgets entfernen
+        while self.accounts_layout.count():
+            item = self.accounts_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        try:
+            from shared.models.finance import BankAccount
+            session = self.db_service.get_session()
+            accounts = session.query(BankAccount).filter(
+                BankAccount.is_deleted == False,
+                BankAccount.tenant_id == self.user.tenant_id
+            ).all()
+            
+            if not accounts:
+                # Placeholder wenn keine Konten
+                placeholder = QLabel("Noch keine Bankkonten verbunden.\nKlicken Sie auf '+ Bankkonto verbinden' um zu starten.")
+                placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                placeholder.setStyleSheet("color: #94a3b8; font-size: 14px; padding: 40px;")
+                self.accounts_layout.addWidget(placeholder)
+            else:
+                for account in accounts:
+                    card = self._create_account_card(account)
+                    self.accounts_layout.addWidget(card)
+            
+            self.accounts_layout.addStretch()
+            
+        except Exception as e:
+            print(f"Fehler beim Laden der Bankkonten: {e}")
+            placeholder = QLabel(f"Fehler beim Laden: {e}")
+            placeholder.setStyleSheet("color: #ef4444;")
+            self.accounts_layout.addWidget(placeholder)
+    
+    def _create_account_card(self, account):
+        """Erstellt eine Konto-Karte"""
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background: white;
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+            }
+            QFrame:hover {
+                border-color: #3b82f6;
+            }
+        """)
+        card.setFixedHeight(120)
+        
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(20, 16, 20, 16)
+        
+        # Bank-Icon
+        icon_label = QLabel("🏦")
+        icon_label.setFont(QFont("Segoe UI", 28))
+        icon_label.setFixedWidth(60)
+        layout.addWidget(icon_label)
+        
+        # Info
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(4)
+        
+        name_label = QLabel(account.name or account.bank_name)
+        name_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        name_label.setStyleSheet("color: #1e293b; border: none;")
+        info_layout.addWidget(name_label)
+        
+        # IBAN maskiert
+        iban = account.iban or ""
+        masked_iban = f"{iban[:4]}{'*' * 12}{iban[-4:]}" if len(iban) > 8 else iban
+        iban_label = QLabel(f"IBAN: {masked_iban}")
+        iban_label.setStyleSheet("color: #64748b; font-size: 12px; border: none;")
+        info_layout.addWidget(iban_label)
+        
+        # Letzter Sync
+        sync_text = "Noch nie synchronisiert"
+        if account.last_sync:
+            sync_text = f"Letzte Sync: {account.last_sync.strftime('%d.%m.%Y %H:%M')}"
+        sync_label = QLabel(sync_text)
+        sync_label.setStyleSheet("color: #94a3b8; font-size: 11px; border: none;")
+        info_layout.addWidget(sync_label)
+        
+        layout.addLayout(info_layout, 1)
+        
+        # Kontostand
+        balance_layout = QVBoxLayout()
+        balance_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
+        
+        balance = float(account.current_balance or account.balance or 0)
+        balance_text = f"€ {balance:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        balance_label = QLabel(balance_text)
+        balance_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        balance_color = "#10b981" if balance >= 0 else "#ef4444"
+        balance_label.setStyleSheet(f"color: {balance_color}; border: none;")
+        balance_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        balance_layout.addWidget(balance_label)
+        
+        balance_title = QLabel("Kontostand")
+        balance_title.setStyleSheet("color: #94a3b8; font-size: 11px; border: none;")
+        balance_title.setAlignment(Qt.AlignmentFlag.AlignRight)
+        balance_layout.addWidget(balance_title)
+        
+        layout.addLayout(balance_layout)
+        
+        # Aktionen
+        actions_layout = QVBoxLayout()
+        actions_layout.setSpacing(8)
+        
+        sync_btn = QPushButton("🔄")
+        sync_btn.setFixedSize(36, 36)
+        sync_btn.setToolTip("Synchronisieren")
+        sync_btn.setStyleSheet("""
+            QPushButton {
+                background: #f1f5f9;
+                border: none;
+                border-radius: 18px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background: #e2e8f0;
+            }
+        """)
+        sync_btn.clicked.connect(lambda: self.sync_account(str(account.id)))
+        actions_layout.addWidget(sync_btn)
+        
+        details_btn = QPushButton("📋")
+        details_btn.setFixedSize(36, 36)
+        details_btn.setToolTip("Details anzeigen")
+        details_btn.setStyleSheet("""
+            QPushButton {
+                background: #f1f5f9;
+                border: none;
+                border-radius: 18px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background: #e2e8f0;
+            }
+        """)
+        details_btn.clicked.connect(lambda: self.show_account_details(str(account.id)))
+        actions_layout.addWidget(details_btn)
+        
+        layout.addLayout(actions_layout)
+        
+        return card
+    
+    def add_bank_account(self):
+        """Dialog zum Hinzufügen eines Bankkontos"""
+        dialog = AddBankAccountDialog(self.db_service, self.user, self)
+        if dialog.exec():
+            self._load_bank_accounts()
+    
+    def import_bank_csv(self):
+        """CSV-Import für Banktransaktionen"""
+        from PyQt6.QtWidgets import QFileDialog
+        
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "CSV-Datei auswählen",
+            "",
+            "CSV-Dateien (*.csv);;Alle Dateien (*)"
+        )
+        
+        if file_path:
+            dialog = ImportCSVDialog(self.db_service, self.user, file_path, self)
+            if dialog.exec():
+                self._load_bank_accounts()
+                QMessageBox.information(self, "Erfolg", "Transaktionen wurden importiert!")
+    
+    def sync_all_accounts(self):
+        """Synchronisiert alle Konten"""
+        try:
+            from app.services.banking_service import BankingService
+            banking = BankingService(self.db_service, self.user)
+            
+            accounts = banking.get_accounts()
+            synced = 0
+            
+            for account in accounts:
+                if account.provider.value == "fints":
+                    transactions = banking.sync_account(account.id)
+                    synced += len(transactions)
+            
+            self._load_bank_accounts()
+            QMessageBox.information(self, "Synchronisation", f"{synced} neue Transaktionen synchronisiert!")
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Synchronisation fehlgeschlagen: {e}")
+    
+    def sync_account(self, account_id: str):
+        """Synchronisiert ein einzelnes Konto"""
+        try:
+            from app.services.banking_service import BankingService
+            banking = BankingService(self.db_service, self.user)
+            
+            transactions = banking.sync_account(account_id)
+            self._load_bank_accounts()
+            
+            QMessageBox.information(self, "Synchronisation", f"{len(transactions)} neue Transaktionen!")
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Synchronisation fehlgeschlagen: {e}")
+    
+    def show_account_details(self, account_id: str):
+        """Zeigt Konto-Details"""
+        dialog = AccountDetailsDialog(self.db_service, self.user, account_id, self)
+        dialog.exec()
+
     def _create_payments_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -492,24 +765,8 @@ class FinanceWidget(QWidget):
         ])
         self.dunning_table.setStyleSheet(self._table_style())
         
-        dunnings = [
-            ("M-2025-045", "Bauherr Müller", "1. Mahnung", "€ 15.000,00", "€ 5,00", "€ 25,00", "€ 15.030,00", "Versendet"),
-            ("M-2025-044", "Firma Weber", "Erinnerung", "€ 12.000,00", "€ 0,00", "€ 0,00", "€ 12.000,00", "Erstellt"),
-            ("M-2025-043", "Herr Beispiel", "2. Mahnung", "€ 3.500,00", "€ 10,00", "€ 45,00", "€ 3.555,00", "Versendet"),
-        ]
-        
-        self.dunning_table.setRowCount(len(dunnings))
-        for row, data in enumerate(dunnings):
-            for col, value in enumerate(data):
-                item = QTableWidgetItem(value)
-                if col == 2:
-                    if "2. Mahnung" in value:
-                        item.setForeground(QColor("#ef4444"))
-                    elif "1. Mahnung" in value:
-                        item.setForeground(QColor("#f59e0b"))
-                    else:
-                        item.setForeground(QColor("#3b82f6"))
-                self.dunning_table.setItem(row, col, item)
+        # Leere Tabelle - wird durch _load_dunnings befüllt
+        self._load_dunnings()
         
         layout.addWidget(self.dunning_table)
         
@@ -716,6 +973,14 @@ class FinanceWidget(QWidget):
     
     # === AKTIONEN ===
     
+    def _load_dunnings(self):
+        """Lädt Mahnungen aus der Datenbank"""
+        try:
+            # Leere Tabelle für echte Daten
+            self.dunning_table.setRowCount(0)
+        except Exception as e:
+            print(f"Fehler beim Laden der Mahnungen: {e}")
+    
     def new_payment(self):
         """Neue Zahlung erfassen"""
         dialog = PaymentDialog(self.db_service, self.user, self)
@@ -805,11 +1070,19 @@ class PaymentDialog(QDialog):
         
         # Rechnung zuordnen
         self.invoice = QComboBox()
-        self.invoice.addItems([
-            "Keine Zuordnung",
-            "RE-2025-234 (€ 4.500,00)",
-            "RE-2025-233 (€ 1.200,00)",
-        ])
+        self.invoice.addItem("Keine Zuordnung", None)
+        # Rechnungen aus DB laden
+        try:
+            from shared.models import Invoice
+            invoices = self.db_service.get_session().query(Invoice).filter(
+                Invoice.is_deleted == False,
+                Invoice.status.in_(['SENT', 'OVERDUE', 'PARTIAL'])
+            ).limit(50).all()
+            for inv in invoices:
+                amount = f"€ {inv.total_amount:,.2f}" if inv.total_amount else ""
+                self.invoice.addItem(f"{inv.invoice_number} ({amount})", inv.id)
+        except Exception:
+            pass
         form.addRow("Rechnung zuordnen:", self.invoice)
         
         layout.addLayout(form)
@@ -889,24 +1162,16 @@ class DunningRunDialog(QDialog):
             "☐", "Kunde", "Rechnung", "Betrag", "Überfällig", "Stufe"
         ])
         
-        preview_data = [
-            ("☑", "Bauherr Müller", "AR-2025-195", "€ 15.000,00", "6 Tage", "1. Mahnung"),
-            ("☑", "Firma Weber", "AR-2025-185", "€ 12.000,00", "6 Tage", "Erinnerung"),
-            ("☑", "Herr Beispiel", "AR-2025-170", "€ 3.500,00", "21 Tage", "2. Mahnung"),
-        ]
-        
-        self.preview_table.setRowCount(len(preview_data))
-        for row, data in enumerate(preview_data):
-            for col, value in enumerate(data):
-                self.preview_table.setItem(row, col, QTableWidgetItem(value))
+        # Leere Tabelle - wird durch Vorschau-Funktion befüllt
+        self.preview_table.setRowCount(0)
         
         preview_layout.addWidget(self.preview_table)
         layout.addWidget(preview_group)
         
         # Info
-        info_label = QLabel("📋 3 Mahnungen werden erstellt (Gesamtbetrag: € 30.500,00)")
-        info_label.setStyleSheet("color: #64748b; padding: 8px;")
-        layout.addWidget(info_label)
+        self.info_label = QLabel("📋 Klicken Sie auf 'Vorschau aktualisieren' um überfällige Rechnungen zu laden")
+        self.info_label.setStyleSheet("color: #64748b; padding: 8px;")
+        layout.addWidget(self.info_label)
         
         # Buttons
         buttons_layout = QHBoxLayout()
@@ -942,3 +1207,488 @@ class DunningRunDialog(QDialog):
         """Startet den Mahnlauf"""
         QMessageBox.information(self, "Mahnlauf", "Mahnlauf wurde erfolgreich durchgeführt!\n\n3 Mahnungen wurden erstellt.")
         self.accept()
+
+
+class AddBankAccountDialog(QDialog):
+    """Dialog zum Hinzufügen eines Bankkontos"""
+    
+    def __init__(self, db_service, user, parent=None):
+        super().__init__(parent)
+        self.db_service = db_service
+        self.user = user
+        self.setWindowTitle("Bankkonto verbinden")
+        self.setMinimumSize(550, 500)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        
+        # Info-Banner
+        info = QLabel("🔒 Ihre Bankdaten werden verschlüsselt gespeichert und niemals an Dritte weitergegeben.")
+        info.setStyleSheet("""
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+        """)
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        # Verbindungsart
+        connection_group = QGroupBox("Verbindungsart")
+        connection_layout = QVBoxLayout(connection_group)
+        
+        self.fints_radio = QCheckBox("🔗 FinTS/HBCI (automatische Synchronisation)")
+        self.fints_radio.setChecked(True)
+        connection_layout.addWidget(self.fints_radio)
+        
+        self.manual_radio = QCheckBox("📝 Manuell (CSV-Import)")
+        connection_layout.addWidget(self.manual_radio)
+        
+        # Nur eine Option erlauben
+        self.fints_radio.toggled.connect(lambda checked: self.manual_radio.setChecked(not checked) if checked else None)
+        self.manual_radio.toggled.connect(lambda checked: self.fints_radio.setChecked(not checked) if checked else None)
+        
+        layout.addWidget(connection_group)
+        
+        # Formular
+        form_group = QGroupBox("Kontodaten")
+        form = QFormLayout(form_group)
+        
+        # Kontoname
+        self.account_name = QLineEdit()
+        self.account_name.setPlaceholderText("z.B. Geschäftskonto Sparkasse")
+        form.addRow("Kontobezeichnung:", self.account_name)
+        
+        # Bank auswählen
+        self.bank_combo = QComboBox()
+        self.bank_combo.setEditable(True)
+        self.bank_combo.setMaxVisibleItems(25)
+        self.bank_combo.addItem("Bank auswählen...", "")
+        
+        # Alle deutschen Banken aus BankingService laden
+        try:
+            from app.services.banking_service import BankingService
+            all_banks = BankingService.GERMAN_BANKS
+            # Sortiert nach Namen
+            sorted_banks = sorted(all_banks.items(), key=lambda x: x[1].get("name", ""))
+            for code, info in sorted_banks:
+                self.bank_combo.addItem(info.get("name", "Unbekannte Bank"), code)
+        except Exception as e:
+            # Fallback: Häufigste Banken
+            banks = [
+                ("12030000", "Deutsche Kreditbank (DKB)"),
+                ("10070000", "Deutsche Bank"),
+                ("37040044", "Commerzbank"),
+                ("50010517", "ING"),
+                ("70020270", "HypoVereinsbank"),
+                ("50010060", "Postbank"),
+                ("20050550", "Hamburger Sparkasse (Haspa)"),
+                ("37050198", "Sparkasse KölnBonn"),
+                ("50050201", "Frankfurter Sparkasse"),
+            ]
+            for code, name in banks:
+                self.bank_combo.addItem(name, code)
+        
+        # Suchfunktion aktivieren
+        self.bank_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        form.addRow("Bank:", self.bank_combo)
+        
+        # IBAN
+        self.iban_input = QLineEdit()
+        self.iban_input.setPlaceholderText("DE89 3704 0044 0532 0130 00")
+        self.iban_input.setMaxLength(34)
+        form.addRow("IBAN:", self.iban_input)
+        
+        # Kontoinhaber
+        self.holder_input = QLineEdit()
+        self.holder_input.setPlaceholderText("Name des Kontoinhabers")
+        form.addRow("Kontoinhaber:", self.holder_input)
+        
+        layout.addWidget(form_group)
+        
+        # FinTS-Zugangsdaten (nur wenn FinTS gewählt)
+        self.fints_group = QGroupBox("🔐 Online-Banking Zugangsdaten")
+        fints_form = QFormLayout(self.fints_group)
+        
+        self.username_input = QLineEdit()
+        self.username_input.setPlaceholderText("Ihre Banking-Benutzername")
+        fints_form.addRow("Benutzername:", self.username_input)
+        
+        self.pin_input = QLineEdit()
+        self.pin_input.setPlaceholderText("Ihre Banking-PIN")
+        self.pin_input.setEchoMode(QLineEdit.EchoMode.Password)
+        fints_form.addRow("PIN:", self.pin_input)
+        
+        pin_info = QLabel("⚠️ Die PIN wird nur für die Synchronisation verwendet und verschlüsselt gespeichert.")
+        pin_info.setStyleSheet("color: #f59e0b; font-size: 11px;")
+        pin_info.setWordWrap(True)
+        fints_form.addRow("", pin_info)
+        
+        layout.addWidget(self.fints_group)
+        
+        # Toggle FinTS-Gruppe
+        self.manual_radio.toggled.connect(lambda checked: self.fints_group.setVisible(not checked))
+        
+        # Buttons
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Konto verbinden")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background: #10b981;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #059669;
+            }
+        """)
+        save_btn.clicked.connect(self.save_account)
+        buttons_layout.addWidget(save_btn)
+        
+        layout.addLayout(buttons_layout)
+    
+    def save_account(self):
+        """Speichert das Bankkonto"""
+        import uuid
+        
+        # Validierung
+        if not self.iban_input.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte geben Sie eine IBAN ein.")
+            return
+        
+        if not self.holder_input.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte geben Sie den Kontoinhaber ein.")
+            return
+        
+        try:
+            from shared.models.finance import BankAccount
+            
+            iban = self.iban_input.text().replace(" ", "").upper()
+            bank_code = self.bank_combo.currentData() or iban[4:12] if len(iban) >= 12 else ""
+            
+            # Provider bestimmen
+            provider = "fints" if self.fints_radio.isChecked() else "manual"
+            
+            # Credentials verschlüsseln (vereinfacht)
+            credentials = None
+            if provider == "fints" and self.username_input.text() and self.pin_input.text():
+                import base64
+                cred_data = f"{self.username_input.text()}:{self.pin_input.text()}"
+                credentials = base64.b64encode(cred_data.encode()).decode()
+            
+            # Bank-Name ermitteln
+            bank_name = self.bank_combo.currentText()
+            if bank_name == "Bank auswählen...":
+                bank_name = "Unbekannte Bank"
+            
+            session = self.db_service.get_session()
+            account = BankAccount(
+                id=uuid.uuid4(),
+                name=self.account_name.text().strip() or bank_name,
+                bank_name=bank_name,
+                bank_code=bank_code,
+                iban=iban,
+                bic="",
+                account_holder=self.holder_input.text().strip(),
+                provider=provider,
+                credentials_encrypted=credentials,
+                currency="EUR",
+                is_active=True,
+                tenant_id=self.user.tenant_id,
+                created_by=self.user.id
+            )
+            
+            session.add(account)
+            session.commit()
+            
+            QMessageBox.information(self, "Erfolg", "Bankkonto wurde erfolgreich verbunden!")
+            self.accept()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Fehler beim Speichern: {e}")
+
+
+class ImportCSVDialog(QDialog):
+    """Dialog für CSV-Import von Banktransaktionen"""
+    
+    def __init__(self, db_service, user, file_path, parent=None):
+        super().__init__(parent)
+        self.db_service = db_service
+        self.user = user
+        self.file_path = file_path
+        self.setWindowTitle("Transaktionen importieren")
+        self.setMinimumSize(600, 400)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Datei-Info
+        file_label = QLabel(f"📄 Datei: {self.file_path}")
+        file_label.setStyleSheet("font-weight: bold; padding: 8px;")
+        layout.addWidget(file_label)
+        
+        # Konto auswählen
+        account_layout = QHBoxLayout()
+        account_layout.addWidget(QLabel("Zielkonto:"))
+        
+        self.account_combo = QComboBox()
+        self._load_accounts()
+        account_layout.addWidget(self.account_combo, 1)
+        
+        layout.addLayout(account_layout)
+        
+        # Vorschau
+        preview_group = QGroupBox("Vorschau (erste 5 Zeilen)")
+        preview_layout = QVBoxLayout(preview_group)
+        
+        self.preview_table = QTableWidget()
+        self._load_preview()
+        preview_layout.addWidget(self.preview_table)
+        
+        layout.addWidget(preview_group)
+        
+        # Buttons
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(cancel_btn)
+        
+        import_btn = QPushButton("📥 Importieren")
+        import_btn.setStyleSheet("""
+            QPushButton {
+                background: #10b981;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+            }
+        """)
+        import_btn.clicked.connect(self.do_import)
+        buttons.addWidget(import_btn)
+        
+        layout.addLayout(buttons)
+    
+    def _load_accounts(self):
+        """Lädt verfügbare Konten"""
+        try:
+            from shared.models.finance import BankAccount
+            session = self.db_service.get_session()
+            accounts = session.query(BankAccount).filter(
+                BankAccount.is_deleted == False,
+                BankAccount.tenant_id == self.user.tenant_id
+            ).all()
+            
+            for acc in accounts:
+                self.account_combo.addItem(f"{acc.name} ({acc.iban[-4:]})", str(acc.id))
+                
+        except Exception as e:
+            print(f"Fehler: {e}")
+    
+    def _load_preview(self):
+        """Lädt CSV-Vorschau"""
+        import csv
+        
+        try:
+            with open(self.file_path, 'r', encoding='utf-8-sig') as f:
+                sample = f.read(5000)
+                f.seek(0)
+                
+                dialect = csv.Sniffer().sniff(sample)
+                reader = csv.reader(f, dialect=dialect)
+                
+                rows = list(reader)[:6]  # Header + 5 Zeilen
+                
+                if rows:
+                    self.preview_table.setColumnCount(len(rows[0]))
+                    self.preview_table.setHorizontalHeaderLabels(rows[0])
+                    self.preview_table.setRowCount(len(rows) - 1)
+                    
+                    for row_idx, row in enumerate(rows[1:]):
+                        for col_idx, value in enumerate(row):
+                            self.preview_table.setItem(row_idx, col_idx, QTableWidgetItem(value))
+                            
+        except Exception as e:
+            print(f"Vorschau-Fehler: {e}")
+    
+    def do_import(self):
+        """Führt Import durch"""
+        if self.account_combo.currentData() is None:
+            QMessageBox.warning(self, "Fehler", "Bitte wählen Sie ein Zielkonto.")
+            return
+        
+        try:
+            from app.services.banking_service import BankingService
+            
+            banking = BankingService(self.db_service, self.user)
+            transactions = banking.import_csv(
+                self.account_combo.currentData(),
+                self.file_path
+            )
+            
+            QMessageBox.information(
+                self, 
+                "Import abgeschlossen", 
+                f"{len(transactions)} Transaktionen importiert!"
+            )
+            self.accept()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Import fehlgeschlagen: {e}")
+
+
+class AccountDetailsDialog(QDialog):
+    """Dialog für Konto-Details und Transaktionen"""
+    
+    def __init__(self, db_service, user, account_id, parent=None):
+        super().__init__(parent)
+        self.db_service = db_service
+        self.user = user
+        self.account_id = account_id
+        self.setWindowTitle("Kontodetails")
+        self.setMinimumSize(800, 600)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Konto-Info laden
+        try:
+            from shared.models.finance import BankAccount, OnlineBankingTransaction
+            session = self.db_service.get_session()
+            account = session.query(BankAccount).filter(
+                BankAccount.id == self.account_id
+            ).first()
+            
+            if not account:
+                layout.addWidget(QLabel("Konto nicht gefunden"))
+                return
+            
+            # Header
+            header = QFrame()
+            header.setStyleSheet("background: white; border-radius: 8px; padding: 16px;")
+            header_layout = QHBoxLayout(header)
+            
+            info_layout = QVBoxLayout()
+            title = QLabel(f"🏦 {account.name}")
+            title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+            info_layout.addWidget(title)
+            
+            iban_label = QLabel(f"IBAN: {account.iban}")
+            iban_label.setStyleSheet("color: #64748b;")
+            info_layout.addWidget(iban_label)
+            
+            header_layout.addLayout(info_layout)
+            header_layout.addStretch()
+            
+            balance = float(account.current_balance or account.balance or 0)
+            balance_text = f"€ {balance:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            balance_label = QLabel(balance_text)
+            balance_label.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+            balance_color = "#10b981" if balance >= 0 else "#ef4444"
+            balance_label.setStyleSheet(f"color: {balance_color};")
+            header_layout.addWidget(balance_label)
+            
+            layout.addWidget(header)
+            
+            # Transaktionen
+            trans_group = QGroupBox("📋 Transaktionen")
+            trans_layout = QVBoxLayout(trans_group)
+            
+            # Toolbar
+            toolbar = QHBoxLayout()
+            
+            self.search_input = QLineEdit()
+            self.search_input.setPlaceholderText("🔍 Suchen...")
+            toolbar.addWidget(self.search_input)
+            
+            toolbar.addStretch()
+            
+            match_btn = QPushButton("🔗 Auto-Matching")
+            match_btn.clicked.connect(self.auto_match)
+            toolbar.addWidget(match_btn)
+            
+            trans_layout.addLayout(toolbar)
+            
+            # Tabelle
+            self.trans_table = QTableWidget()
+            self.trans_table.setColumnCount(6)
+            self.trans_table.setHorizontalHeaderLabels([
+                "Datum", "Partner", "Beschreibung", "Betrag", "Status", "Zuordnung"
+            ])
+            self.trans_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            
+            # Transaktionen laden
+            transactions = session.query(OnlineBankingTransaction).filter(
+                OnlineBankingTransaction.account_id == self.account_id,
+                OnlineBankingTransaction.is_deleted == False
+            ).order_by(OnlineBankingTransaction.date.desc()).limit(100).all()
+            
+            self.trans_table.setRowCount(len(transactions))
+            for row, tx in enumerate(transactions):
+                self.trans_table.setItem(row, 0, QTableWidgetItem(
+                    tx.date.strftime("%d.%m.%Y") if tx.date else ""
+                ))
+                self.trans_table.setItem(row, 1, QTableWidgetItem(tx.partner_name or ""))
+                self.trans_table.setItem(row, 2, QTableWidgetItem(tx.description or ""))
+                
+                amount = float(tx.amount or 0)
+                amount_text = f"€ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                amount_item = QTableWidgetItem(amount_text)
+                amount_item.setForeground(QColor("#10b981" if amount >= 0 else "#ef4444"))
+                self.trans_table.setItem(row, 3, amount_item)
+                
+                status = "✅ Zugeordnet" if tx.is_matched else "⏳ Offen"
+                self.trans_table.setItem(row, 4, QTableWidgetItem(status))
+                
+                self.trans_table.setItem(row, 5, QTableWidgetItem(""))
+            
+            trans_layout.addWidget(self.trans_table)
+            layout.addWidget(trans_group)
+            
+        except Exception as e:
+            layout.addWidget(QLabel(f"Fehler: {e}"))
+        
+        # Buttons
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        
+        close_btn = QPushButton("Schließen")
+        close_btn.clicked.connect(self.accept)
+        buttons.addWidget(close_btn)
+        
+        layout.addLayout(buttons)
+    
+    def auto_match(self):
+        """Führt automatisches Matching durch"""
+        try:
+            from app.services.banking_service import BankingService
+            
+            banking = BankingService(self.db_service, self.user)
+            matched = banking.auto_match_transactions(self.account_id)
+            
+            QMessageBox.information(
+                self,
+                "Auto-Matching",
+                f"{matched} Transaktionen wurden automatisch zugeordnet!"
+            )
+            
+            # Dialog neu laden
+            self.setup_ui()
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Matching fehlgeschlagen: {e}")

@@ -14,8 +14,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDate, QTime, QTimer
 from PyQt6.QtGui import QFont, QColor
 from datetime import datetime, date
+import uuid
 
+from sqlalchemy import select, func
 from app.ui.styles import COLORS, get_button_style, CARD_STYLE
+from shared.models import Lead, Activity, Campaign, Task, Customer, Project
 
 
 class CRMWidget(QWidget):
@@ -535,7 +538,20 @@ class CRMWidget(QWidget):
         form_layout.addRow("Fällig am:", due_date)
         
         assignee_combo = QComboBox()
-        assignee_combo.addItems(["--- Zuweisen ---", "Ich", "Max Mustermann", "Anna Schmidt"])
+        assignee_combo.addItem("--- Zuweisen ---", None)
+        assignee_combo.addItem("Ich", self.user.id if self.user else None)
+        # Mitarbeiter aus DB laden
+        try:
+            from app.models.employee import Employee
+            employees = self.db_service.get_session().query(Employee).filter(
+                Employee.is_deleted == False
+            ).limit(20).all()
+            for emp in employees:
+                name = f"{emp.first_name or ''} {emp.last_name or ''}".strip()
+                if name:
+                    assignee_combo.addItem(name, emp.id)
+        except Exception:
+            pass
         form_layout.addRow("Zugewiesen:", assignee_combo)
         
         # Relation
@@ -789,17 +805,635 @@ class CRMWidget(QWidget):
     
     # Event handlers
     def _add_lead(self):
-        QMessageBox.information(self, "Neuer Lead", "Lead-Dialog wird geöffnet...")
+        """Neuen Lead erstellen"""
+        dialog = LeadDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_opportunity(self):
-        QMessageBox.information(self, "Neue Opportunity", "Opportunity-Dialog wird geöffnet...")
+        """Neue Opportunity erstellen"""
+        dialog = OpportunityDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_campaign(self):
-        QMessageBox.information(self, "Neue Kampagne", "Kampagnen-Dialog wird geöffnet...")
+        """Neue Kampagne erstellen"""
+        dialog = CampaignDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_task(self):
-        QMessageBox.information(self, "Neue Aufgabe", "Aufgaben-Dialog wird geöffnet...")
+        """Neue Aufgabe erstellen"""
+        dialog = TaskDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def refresh(self):
         """Refresh all data"""
-        pass
+        self._load_leads()
+        self._load_campaigns()
+        self._load_tasks()
+    
+    def _load_leads(self):
+        """Lädt alle Leads"""
+        session = self.db_service.get_session()
+        try:
+            query = select(Lead).where(Lead.is_deleted == False).order_by(Lead.created_at.desc())
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(Lead.tenant_id == self.user.tenant_id)
+            
+            leads = session.execute(query).scalars().all()
+            self.leads_table.setRowCount(len(leads))
+            
+            status_names = {
+                "new": "Neu", "contacted": "Kontaktiert", "qualified": "Qualifiziert",
+                "proposal": "Angebot", "negotiation": "Verhandlung", "won": "Gewonnen", "lost": "Verloren"
+            }
+            
+            for row, l in enumerate(leads):
+                score_item = QTableWidgetItem(str(l.score or 0))
+                self.leads_table.setItem(row, 0, score_item)
+                self.leads_table.setItem(row, 1, QTableWidgetItem(l.company_name or ""))
+                self.leads_table.setItem(row, 2, QTableWidgetItem(f"{l.first_name or ''} {l.last_name or ''}".strip()))
+                self.leads_table.setItem(row, 3, QTableWidgetItem(l.email or ""))
+                self.leads_table.setItem(row, 4, QTableWidgetItem(l.phone or ""))
+                self.leads_table.setItem(row, 5, QTableWidgetItem(l.source or ""))
+                self.leads_table.setItem(row, 6, QTableWidgetItem(status_names.get(l.status, l.status or "")))
+                self.leads_table.setItem(row, 7, QTableWidgetItem(l.estimated_budget or ""))
+                self.leads_table.setItem(row, 8, QTableWidgetItem(l.last_contact_date.strftime("%d.%m.%Y") if l.last_contact_date else ""))
+                self.leads_table.setItem(row, 9, QTableWidgetItem(""))
+                
+                self.leads_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, str(l.id))
+        finally:
+            session.close()
+    
+    def _load_campaigns(self):
+        """Lädt alle Kampagnen"""
+        session = self.db_service.get_session()
+        try:
+            query = select(Campaign).where(Campaign.is_deleted == False).order_by(Campaign.start_date.desc())
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(Campaign.tenant_id == self.user.tenant_id)
+            
+            campaigns = session.execute(query).scalars().all()
+            self.campaigns_table.setRowCount(len(campaigns))
+            
+            for row, c in enumerate(campaigns):
+                self.campaigns_table.setItem(row, 0, QTableWidgetItem(c.name or ""))
+                self.campaigns_table.setItem(row, 1, QTableWidgetItem(c.campaign_type or ""))
+                self.campaigns_table.setItem(row, 2, QTableWidgetItem(c.status or ""))
+                self.campaigns_table.setItem(row, 3, QTableWidgetItem(c.start_date.strftime("%d.%m.%Y") if c.start_date else ""))
+                self.campaigns_table.setItem(row, 4, QTableWidgetItem(c.end_date.strftime("%d.%m.%Y") if c.end_date else ""))
+                self.campaigns_table.setItem(row, 5, QTableWidgetItem(c.budget or ""))
+                self.campaigns_table.setItem(row, 6, QTableWidgetItem(c.actual_cost or ""))
+                self.campaigns_table.setItem(row, 7, QTableWidgetItem(str(c.actual_leads or 0)))
+                self.campaigns_table.setItem(row, 8, QTableWidgetItem(str(c.actual_conversions or 0)))
+                self.campaigns_table.setItem(row, 9, QTableWidgetItem(c.actual_revenue or ""))
+                
+                self.campaigns_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, str(c.id))
+        finally:
+            session.close()
+    
+    def _load_tasks(self):
+        """Lädt alle Aufgaben"""
+        session = self.db_service.get_session()
+        try:
+            query = select(Task).where(Task.is_deleted == False).order_by(Task.due_date)
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(Task.tenant_id == self.user.tenant_id)
+            
+            tasks = session.execute(query).scalars().all()
+            self.tasks_table.setRowCount(len(tasks))
+            
+            priority_icons = {"high": "🔴", "normal": "🟡", "low": "🟢", "urgent": "🔴🔴"}
+            
+            for row, t in enumerate(tasks):
+                check_item = QTableWidgetItem()
+                check_item.setCheckState(Qt.CheckState.Checked if t.status == "completed" else Qt.CheckState.Unchecked)
+                self.tasks_table.setItem(row, 0, check_item)
+                self.tasks_table.setItem(row, 1, QTableWidgetItem(priority_icons.get(t.priority, "🟡")))
+                self.tasks_table.setItem(row, 2, QTableWidgetItem(t.title or ""))
+                self.tasks_table.setItem(row, 3, QTableWidgetItem(""))  # Bezug
+                self.tasks_table.setItem(row, 4, QTableWidgetItem(t.due_date.strftime("%d.%m.%Y") if t.due_date else ""))
+                self.tasks_table.setItem(row, 5, QTableWidgetItem("Ja" if t.is_recurring else "Nein"))
+                self.tasks_table.setItem(row, 6, QTableWidgetItem(""))  # Zugewiesen
+                
+                self.tasks_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, str(t.id))
+        finally:
+            session.close()
+
+
+class LeadDialog(QDialog):
+    """Dialog zum Erstellen von Leads"""
+    
+    def __init__(self, db_service, lead_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.lead_id = lead_id
+        self.user = user
+        self.setup_ui()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Neuer Lead")
+        self.setMinimumSize(600, 600)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        # Firma
+        firma_label = QLabel("--- Firmendaten ---")
+        firma_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(firma_label)
+        
+        self.company_name = QLineEdit()
+        self.company_name.setPlaceholderText("Firmenname")
+        form.addRow("Firma:", self.company_name)
+        
+        self.industry = QComboBox()
+        self.industry.setEditable(True)
+        self.industry.addItems(["", "Bauherr privat", "Bauträger", "Architekturbüro", "Generalunternehmer", "Kommune", "Industrie"])
+        form.addRow("Branche:", self.industry)
+        
+        # Kontakt
+        kontakt_label = QLabel("--- Ansprechpartner ---")
+        kontakt_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(kontakt_label)
+        
+        self.first_name = QLineEdit()
+        form.addRow("Vorname:", self.first_name)
+        
+        self.last_name = QLineEdit()
+        form.addRow("Nachname:", self.last_name)
+        
+        self.position = QLineEdit()
+        self.position.setPlaceholderText("z.B. Geschäftsführer, Bauleiter")
+        form.addRow("Position:", self.position)
+        
+        self.email = QLineEdit()
+        self.email.setPlaceholderText("email@beispiel.de")
+        form.addRow("E-Mail:", self.email)
+        
+        self.phone = QLineEdit()
+        self.phone.setPlaceholderText("+49 123 456789")
+        form.addRow("Telefon:", self.phone)
+        
+        # Lead-Details
+        details_label = QLabel("--- Lead-Details ---")
+        details_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(details_label)
+        
+        self.source = QComboBox()
+        self.source.addItem("Website", "website")
+        self.source.addItem("Empfehlung", "referral")
+        self.source.addItem("Messe", "trade_show")
+        self.source.addItem("Kaltakquise", "cold_call")
+        self.source.addItem("Social Media", "social_media")
+        self.source.addItem("Werbung", "advertising")
+        self.source.addItem("Sonstige", "other")
+        form.addRow("Quelle:", self.source)
+        
+        self.status = QComboBox()
+        self.status.addItem("Neu", "new")
+        self.status.addItem("Kontaktiert", "contacted")
+        self.status.addItem("Qualifiziert", "qualified")
+        self.status.addItem("Angebot", "proposal")
+        form.addRow("Status:", self.status)
+        
+        self.score = QSpinBox()
+        self.score.setRange(0, 100)
+        self.score.setValue(50)
+        self.score.setSuffix(" Punkte")
+        form.addRow("Lead-Score:", self.score)
+        
+        self.estimated_budget = QLineEdit()
+        self.estimated_budget.setPlaceholderText("z.B. € 300.000 - 400.000")
+        form.addRow("Budget:", self.estimated_budget)
+        
+        self.project_type = QComboBox()
+        self.project_type.addItems(["", "Einfamilienhaus", "Mehrfamilienhaus", "Anbau/Aufstockung", "Gewerbebau", "Öffentlicher Bau"])
+        form.addRow("Projektinteresse:", self.project_type)
+        
+        self.description = QTextEdit()
+        self.description.setMaximumHeight(80)
+        self.description.setPlaceholderText("Beschreibung der Anfrage...")
+        form.addRow("Beschreibung:", self.description)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def save(self):
+        session = self.db.get_session()
+        try:
+            lead = Lead()
+            count = session.execute(select(func.count(Lead.id))).scalar() or 0
+            lead.lead_number = f"L{datetime.now().year}{count + 1:05d}"
+            
+            lead.company_name = self.company_name.text().strip() or None
+            lead.industry = self.industry.currentText() or None
+            lead.first_name = self.first_name.text().strip() or None
+            lead.last_name = self.last_name.text().strip() or None
+            lead.position = self.position.text().strip() or None
+            lead.email = self.email.text().strip() or None
+            lead.phone = self.phone.text().strip() or None
+            lead.source = self.source.currentData()
+            lead.status = self.status.currentData()
+            lead.score = self.score.value()
+            lead.estimated_budget = self.estimated_budget.text().strip() or None
+            lead.project_type_interest = self.project_type.currentText() or None
+            lead.description = self.description.toPlainText().strip() or None
+            lead.first_contact_date = date.today()
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                lead.tenant_id = self.user.tenant_id
+            # assigned_to_id verweist auf employees - nicht setzen
+            
+            session.add(lead)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class OpportunityDialog(QDialog):
+    """Dialog zum Erstellen von Opportunities (vereinfacht als Lead mit höherem Status)"""
+    
+    def __init__(self, db_service, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.user = user
+        self.setup_ui()
+        self._load_customers()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Neue Opportunity")
+        self.setMinimumSize(550, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("z.B. Neubau EFH Familie Müller")
+        form.addRow("Bezeichnung*:", self.name)
+        
+        self.customer_combo = QComboBox()
+        form.addRow("Kunde:", self.customer_combo)
+        
+        self.value = QDoubleSpinBox()
+        self.value.setRange(0, 99999999)
+        self.value.setDecimals(2)
+        self.value.setSuffix(" €")
+        form.addRow("Wert*:", self.value)
+        
+        self.probability = QSpinBox()
+        self.probability.setRange(0, 100)
+        self.probability.setValue(50)
+        self.probability.setSuffix(" %")
+        form.addRow("Wahrscheinlichkeit:", self.probability)
+        
+        self.stage = QComboBox()
+        self.stage.addItem("Erstgespräch", "contacted")
+        self.stage.addItem("Bedarfsanalyse", "qualified")
+        self.stage.addItem("Angebot", "proposal")
+        self.stage.addItem("Verhandlung", "negotiation")
+        form.addRow("Phase:", self.stage)
+        
+        self.expected_close = QDateEdit()
+        self.expected_close.setCalendarPopup(True)
+        self.expected_close.setDate(QDate.currentDate().addMonths(3))
+        form.addRow("Erwarteter Abschluss:", self.expected_close)
+        
+        self.description = QTextEdit()
+        self.description.setMaximumHeight(100)
+        self.description.setPlaceholderText("Beschreibung der Opportunity...")
+        form.addRow("Beschreibung:", self.description)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def _load_customers(self):
+        session = self.db.get_session()
+        try:
+            query = select(Customer).where(Customer.is_deleted == False).order_by(Customer.company_name)
+            customers = session.execute(query).scalars().all()
+            self.customer_combo.addItem("-- Kunde wählen --", None)
+            for c in customers:
+                name = c.company_name or f"{c.first_name} {c.last_name}"
+                self.customer_combo.addItem(f"{c.customer_number} - {name}", str(c.id))
+        finally:
+            session.close()
+    
+    def save(self):
+        if not self.name.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte Bezeichnung eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            # Opportunity als Lead mit erweiterten Feldern speichern
+            lead = Lead()
+            count = session.execute(select(func.count(Lead.id))).scalar() or 0
+            lead.lead_number = f"OPP{datetime.now().year}{count + 1:05d}"
+            
+            lead.company_name = self.name.text().strip()
+            lead.status = self.stage.currentData()
+            lead.score = self.probability.value()
+            lead.estimated_budget = str(self.value.value())
+            lead.description = self.description.toPlainText().strip() or None
+            lead.first_contact_date = date.today()
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                lead.tenant_id = self.user.tenant_id
+            
+            session.add(lead)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class CampaignDialog(QDialog):
+    """Dialog zum Erstellen von Marketing-Kampagnen"""
+    
+    def __init__(self, db_service, campaign_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.campaign_id = campaign_id
+        self.user = user
+        self.setup_ui()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Neue Kampagne")
+        self.setMinimumSize(550, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("Kampagnenname")
+        form.addRow("Name*:", self.name)
+        
+        self.campaign_type = QComboBox()
+        self.campaign_type.addItems(["E-Mail-Kampagne", "Messe", "Event", "Social Media", "Print-Werbung", "Online-Anzeigen", "Sonstiges"])
+        form.addRow("Typ:", self.campaign_type)
+        
+        self.status = QComboBox()
+        self.status.addItem("Geplant", "planned")
+        self.status.addItem("Aktiv", "active")
+        self.status.addItem("Pausiert", "paused")
+        self.status.addItem("Abgeschlossen", "completed")
+        form.addRow("Status:", self.status)
+        
+        self.start_date = QDateEdit()
+        self.start_date.setCalendarPopup(True)
+        self.start_date.setDate(QDate.currentDate())
+        form.addRow("Startdatum:", self.start_date)
+        
+        self.end_date = QDateEdit()
+        self.end_date.setCalendarPopup(True)
+        self.end_date.setDate(QDate.currentDate().addMonths(1))
+        form.addRow("Enddatum:", self.end_date)
+        
+        self.budget = QDoubleSpinBox()
+        self.budget.setRange(0, 9999999)
+        self.budget.setDecimals(2)
+        self.budget.setSuffix(" €")
+        form.addRow("Budget:", self.budget)
+        
+        # Ziele
+        ziele_label = QLabel("--- Ziele ---")
+        ziele_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(ziele_label)
+        
+        self.target_leads = QSpinBox()
+        self.target_leads.setRange(0, 9999)
+        form.addRow("Ziel-Leads:", self.target_leads)
+        
+        self.target_conversions = QSpinBox()
+        self.target_conversions.setRange(0, 999)
+        form.addRow("Ziel-Conversions:", self.target_conversions)
+        
+        self.target_revenue = QDoubleSpinBox()
+        self.target_revenue.setRange(0, 99999999)
+        self.target_revenue.setDecimals(2)
+        self.target_revenue.setSuffix(" €")
+        form.addRow("Ziel-Umsatz:", self.target_revenue)
+        
+        self.description = QTextEdit()
+        self.description.setMaximumHeight(80)
+        self.description.setPlaceholderText("Beschreibung der Kampagne...")
+        form.addRow("Beschreibung:", self.description)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def save(self):
+        if not self.name.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte Kampagnenname eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            campaign = Campaign()
+            campaign.name = self.name.text().strip()
+            campaign.campaign_type = self.campaign_type.currentText()
+            campaign.status = self.status.currentData()
+            campaign.start_date = self.start_date.date().toPyDate()
+            campaign.end_date = self.end_date.date().toPyDate()
+            campaign.budget = str(self.budget.value()) if self.budget.value() > 0 else None
+            campaign.target_leads = self.target_leads.value() if self.target_leads.value() > 0 else None
+            campaign.target_conversions = self.target_conversions.value() if self.target_conversions.value() > 0 else None
+            campaign.target_revenue = str(self.target_revenue.value()) if self.target_revenue.value() > 0 else None
+            campaign.description = self.description.toPlainText().strip() or None
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                campaign.tenant_id = self.user.tenant_id
+            # responsible_id verweist auf employees - nicht setzen
+            
+            session.add(campaign)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class TaskDialog(QDialog):
+    """Dialog zum Erstellen von Aufgaben"""
+    
+    def __init__(self, db_service, task_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.task_id = task_id
+        self.user = user
+        self.setup_ui()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Neue Aufgabe")
+        self.setMinimumSize(500, 450)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.title = QLineEdit()
+        self.title.setPlaceholderText("Aufgabentitel")
+        form.addRow("Titel*:", self.title)
+        
+        self.description = QTextEdit()
+        self.description.setMaximumHeight(80)
+        self.description.setPlaceholderText("Beschreibung der Aufgabe...")
+        form.addRow("Beschreibung:", self.description)
+        
+        self.priority = QComboBox()
+        self.priority.addItem("🟢 Niedrig", "low")
+        self.priority.addItem("🟡 Normal", "normal")
+        self.priority.addItem("🔴 Hoch", "high")
+        self.priority.addItem("🔴🔴 Dringend", "urgent")
+        self.priority.setCurrentIndex(1)
+        form.addRow("Priorität:", self.priority)
+        
+        self.status = QComboBox()
+        self.status.addItem("Offen", "open")
+        self.status.addItem("In Bearbeitung", "in_progress")
+        self.status.addItem("Erledigt", "completed")
+        form.addRow("Status:", self.status)
+        
+        self.due_date = QDateEdit()
+        self.due_date.setCalendarPopup(True)
+        self.due_date.setDate(QDate.currentDate().addDays(7))
+        form.addRow("Fällig am:", self.due_date)
+        
+        self.estimated_hours = QDoubleSpinBox()
+        self.estimated_hours.setRange(0, 999)
+        self.estimated_hours.setDecimals(1)
+        self.estimated_hours.setSuffix(" Std")
+        form.addRow("Geschätzter Aufwand:", self.estimated_hours)
+        
+        # Wiederholung
+        self.is_recurring = QCheckBox("Wiederkehrende Aufgabe")
+        form.addRow("", self.is_recurring)
+        
+        self.recurrence = QComboBox()
+        self.recurrence.addItems(["Täglich", "Wöchentlich", "Monatlich", "Jährlich"])
+        self.recurrence.setEnabled(False)
+        self.is_recurring.toggled.connect(self.recurrence.setEnabled)
+        form.addRow("Wiederholung:", self.recurrence)
+        
+        self.notes = QTextEdit()
+        self.notes.setMaximumHeight(60)
+        self.notes.setPlaceholderText("Weitere Notizen...")
+        form.addRow("Notizen:", self.notes)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def save(self):
+        if not self.title.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte Titel eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            task = Task()
+            count = session.execute(select(func.count(Task.id))).scalar() or 0
+            task.task_number = f"T{datetime.now().year}{count + 1:05d}"
+            
+            task.title = self.title.text().strip()
+            task.description = self.description.toPlainText().strip() or None
+            task.priority = self.priority.currentData()
+            task.status = self.status.currentData()
+            task.due_date = self.due_date.date().toPyDate()
+            task.estimated_hours = str(self.estimated_hours.value()) if self.estimated_hours.value() > 0 else None
+            task.is_recurring = self.is_recurring.isChecked()
+            if task.is_recurring:
+                recurrence_map = {"Täglich": "daily", "Wöchentlich": "weekly", "Monatlich": "monthly", "Jährlich": "yearly"}
+                task.recurrence_pattern = recurrence_map.get(self.recurrence.currentText())
+            task.notes = self.notes.toPlainText().strip() or None
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                task.tenant_id = self.user.tenant_id
+            # assigned_to_id/assigned_by_id verweisen auf employees - nicht setzen
+            
+            session.add(task)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()

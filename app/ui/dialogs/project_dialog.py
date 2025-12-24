@@ -116,10 +116,10 @@ class ProjectDialog(QDialog):
         info_form.addRow("Status:", self.status)
         
         self.priority = QComboBox()
-        self.priority.addItem("Niedrig", "low")
-        self.priority.addItem("Normal", "normal")
-        self.priority.addItem("Hoch", "high")
-        self.priority.addItem("Kritisch", "critical")
+        self.priority.addItem("Niedrig", 7)
+        self.priority.addItem("Normal", 5)
+        self.priority.addItem("Hoch", 3)
+        self.priority.addItem("Kritisch", 1)
         self.priority.setCurrentIndex(1)
         info_form.addRow("Priorität:", self.priority)
         
@@ -936,6 +936,11 @@ class ProjectDialog(QDialog):
             QMessageBox.warning(self, "Fehler", "Bitte Projektnamen eingeben.")
             return
         
+        customer_id = self.customer_combo.currentData()
+        if not customer_id:
+            QMessageBox.warning(self, "Fehler", "Bitte einen Kunden auswählen.")
+            return
+        
         session = self.db.get_session()
         try:
             if self.project_id:
@@ -953,8 +958,7 @@ class ProjectDialog(QDialog):
             # ===== GRUNDDATEN =====
             project.name = self.name.text().strip()
             
-            customer_id = self.customer_combo.currentData()
-            project.customer_id = uuid.UUID(customer_id) if customer_id else None
+            project.customer_id = uuid.UUID(customer_id)
             
             project.project_type = ProjectType(self.project_type.currentData())
             project.status = ProjectStatus(self.status.currentData())

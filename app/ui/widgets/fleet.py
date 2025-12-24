@@ -14,8 +14,14 @@ from PyQt6.QtCore import Qt, QDate, QTime, QTimer
 from PyQt6.QtGui import QFont, QColor
 from datetime import datetime, date
 from decimal import Decimal
+import uuid
 
+from sqlalchemy import select, func
 from app.ui.styles import COLORS, get_button_style, CARD_STYLE
+from shared.models import (
+    Vehicle, Equipment, VehicleType, VehicleStatus, EquipmentType,
+    FuelLog, MileageLog, VehicleMaintenance, EquipmentMaintenance, EquipmentReservation
+)
 
 
 class FleetWidget(QWidget):
@@ -367,6 +373,7 @@ class FleetWidget(QWidget):
         
         export_btn = QPushButton("📄 Export")
         export_btn.setStyleSheet(get_button_style('secondary'))
+        export_btn.clicked.connect(self._export_trip_log)
         toolbar.addWidget(export_btn)
         
         layout.addLayout(toolbar)
@@ -682,26 +689,1208 @@ class FleetWidget(QWidget):
     
     # Event handlers
     def _add_vehicle(self):
-        QMessageBox.information(self, "Neues Fahrzeug", "Fahrzeug-Dialog wird geöffnet...")
+        """Neues Fahrzeug hinzufügen"""
+        dialog = VehicleDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_crane(self):
-        QMessageBox.information(self, "Neuer Kran", "Kran-Dialog wird geöffnet...")
+        """Neuen Kran hinzufügen"""
+        dialog = EquipmentDialog(self.db_service, equipment_type="crane", user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_equipment(self):
-        QMessageBox.information(self, "Neues Gerät", "Geräte-Dialog wird geöffnet...")
+        """Neues Gerät hinzufügen"""
+        dialog = EquipmentDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_fuel_entry(self):
-        QMessageBox.information(self, "Tankvorgang", "Tankvorgang-Dialog wird geöffnet...")
+        """Tankvorgang erfassen"""
+        dialog = FuelLogDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_trip(self):
-        QMessageBox.information(self, "Neue Fahrt", "Fahrt-Dialog wird geöffnet...")
+        """Fahrt erfassen"""
+        dialog = TripLogDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_maintenance(self):
-        QMessageBox.information(self, "Wartung erfassen", "Wartungs-Dialog wird geöffnet...")
+        """Wartung erfassen"""
+        dialog = MaintenanceDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
     
     def _add_reservation(self):
-        QMessageBox.information(self, "Neue Reservierung", "Reservierungs-Dialog wird geöffnet...")
+        """Reservierung erstellen"""
+        dialog = ReservationDialog(self.db_service, user=self.user, parent=self)
+        if dialog.exec():
+            self.refresh()
+    
+    def _export_trip_log(self):
+        """Exportiert Fahrtenbuch als PDF/Excel"""
+        from PyQt6.QtWidgets import QFileDialog
+        from shared.services.export_service import ExportService
+        from datetime import datetime
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Fahrtenbuch exportieren",
+            f"Fahrtenbuch_{datetime.now().strftime('%Y%m%d')}.pdf",
+            "PDF Dateien (*.pdf);;Excel Dateien (*.xlsx)"
+        )
+        
+        if not filename:
+            return
+        
+        try:
+            # Fahrten laden
+            session = self.db_service.get_session()
+            query = select(TripLog).where(TripLog.is_deleted == False).order_by(TripLog.departure_datetime.desc())
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(TripLog.tenant_id == self.user.tenant_id)
+            trips = session.execute(query).scalars().all()
+            session.close()
+            
+            columns = [
+                {"key": "date", "label": "Datum", "width": 15},
+                {"key": "vehicle", "label": "Fahrzeug", "width": 20},
+                {"key": "driver", "label": "Fahrer", "width": 20},
+                {"key": "start", "label": "Start", "width": 25},
+                {"key": "destination", "label": "Ziel", "width": 25},
+                {"key": "km_start", "label": "km Start", "width": 15},
+                {"key": "km_end", "label": "km Ende", "width": 15},
+                {"key": "km_total", "label": "km Gesamt", "width": 15},
+                {"key": "purpose", "label": "Zweck", "width": 30},
+            ]
+            
+            data = []
+            for t in trips:
+                data.append({
+                    "date": t.departure_datetime.strftime('%d.%m.%Y') if t.departure_datetime else '',
+                    "vehicle": t.vehicle.license_plate if t.vehicle else '',
+                    "driver": t.driver_name or '',
+                    "start": t.start_location or '',
+                    "destination": t.end_location or '',
+                    "km_start": str(t.start_mileage or ''),
+                    "km_end": str(t.end_mileage or ''),
+                    "km_total": str((t.end_mileage or 0) - (t.start_mileage or 0)),
+                    "purpose": t.purpose or '',
+                })
+            
+            if filename.endswith('.xlsx'):
+                ExportService.export_to_excel(data=data, columns=columns, title="Fahrtenbuch", filename=filename)
+            else:
+                ExportService.export_to_pdf(data=data, columns=columns, title="Fahrtenbuch", filename=filename, landscape_mode=True)
+            
+            QMessageBox.information(self, "Erfolg", f"Export wurde erstellt:\n{filename}")
+            import os
+            os.startfile(filename)
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Export fehlgeschlagen: {e}")
+    
+    def _export_vehicles(self):
+        """Exportiert Fahrzeugliste als PDF"""
+        from PyQt6.QtWidgets import QFileDialog
+        from shared.services.export_service import ExportService
+        from datetime import datetime
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Fahrzeugliste exportieren",
+            f"Fuhrpark_{datetime.now().strftime('%Y%m%d')}.pdf",
+            "PDF Dateien (*.pdf)"
+        )
+        
+        if not filename:
+            return
+        
+        try:
+            session = self.db_service.get_session()
+            query = select(Vehicle).where(Vehicle.is_deleted == False).order_by(Vehicle.license_plate)
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(Vehicle.tenant_id == self.user.tenant_id)
+            vehicles = session.execute(query).scalars().all()
+            session.close()
+            
+            ExportService.export_fleet_pdf(vehicles=vehicles, filename=filename)
+            
+            QMessageBox.information(self, "Erfolg", f"Export wurde erstellt:\n{filename}")
+            import os
+            os.startfile(filename)
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Fehler", f"Export fehlgeschlagen: {e}")
     
     def refresh(self):
         """Refresh all data"""
-        pass
+        self._load_vehicles()
+        self._load_equipment()
+    
+    def _load_vehicles(self):
+        """Lädt alle Fahrzeuge"""
+        session = self.db_service.get_session()
+        try:
+            query = select(Vehicle).where(Vehicle.is_deleted == False).order_by(Vehicle.license_plate)
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(Vehicle.tenant_id == self.user.tenant_id)
+            
+            vehicles = session.execute(query).scalars().all()
+            self.vehicles_table.setRowCount(len(vehicles))
+            
+            status_names = {
+                VehicleStatus.AVAILABLE: "Verfügbar",
+                VehicleStatus.IN_USE: "Im Einsatz",
+                VehicleStatus.MAINTENANCE: "In Wartung",
+                VehicleStatus.REPAIR: "In Reparatur",
+                VehicleStatus.RESERVED: "Reserviert",
+                VehicleStatus.OUT_OF_SERVICE: "Außer Betrieb",
+            }
+            
+            type_names = {
+                VehicleType.PKW: "PKW",
+                VehicleType.TRANSPORTER: "Transporter",
+                VehicleType.LKW: "LKW",
+                VehicleType.ANHAENGER: "Anhänger",
+            }
+            
+            for row, v in enumerate(vehicles):
+                self.vehicles_table.setItem(row, 0, QTableWidgetItem(v.license_plate or ""))
+                self.vehicles_table.setItem(row, 1, QTableWidgetItem(type_names.get(v.vehicle_type, str(v.vehicle_type.value) if v.vehicle_type else "")))
+                self.vehicles_table.setItem(row, 2, QTableWidgetItem(f"{v.manufacturer or ''} {v.model or ''}".strip()))
+                self.vehicles_table.setItem(row, 3, QTableWidgetItem(""))  # Fahrer
+                self.vehicles_table.setItem(row, 4, QTableWidgetItem(status_names.get(v.status, "")))
+                self.vehicles_table.setItem(row, 5, QTableWidgetItem(v.tuv_due.strftime("%d.%m.%Y") if v.tuv_due else ""))
+                self.vehicles_table.setItem(row, 6, QTableWidgetItem(v.au_due.strftime("%d.%m.%Y") if v.au_due else ""))
+                self.vehicles_table.setItem(row, 7, QTableWidgetItem(v.uvv_due.strftime("%d.%m.%Y") if v.uvv_due else ""))
+                self.vehicles_table.setItem(row, 8, QTableWidgetItem(str(v.current_mileage_km or 0)))
+                self.vehicles_table.setItem(row, 9, QTableWidgetItem(v.current_location or ""))
+                self.vehicles_table.setItem(row, 10, QTableWidgetItem("✓" if v.gps_enabled else ""))
+                
+                self.vehicles_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, str(v.id))
+        finally:
+            session.close()
+    
+    def _load_equipment(self):
+        """Lädt alle Geräte"""
+        session = self.db_service.get_session()
+        try:
+            query = select(Equipment).where(Equipment.is_deleted == False).order_by(Equipment.equipment_number)
+            if self.user and hasattr(self.user, 'tenant_id') and self.user.tenant_id:
+                query = query.where(Equipment.tenant_id == self.user.tenant_id)
+            
+            equipment_list = session.execute(query).scalars().all()
+            self.equipment_table.setRowCount(len(equipment_list))
+            
+            status_names = {
+                VehicleStatus.AVAILABLE: "Verfügbar",
+                VehicleStatus.IN_USE: "Im Einsatz",
+                VehicleStatus.MAINTENANCE: "In Wartung",
+                VehicleStatus.REPAIR: "In Reparatur",
+            }
+            
+            for row, e in enumerate(equipment_list):
+                self.equipment_table.setItem(row, 0, QTableWidgetItem(e.equipment_number or ""))
+                self.equipment_table.setItem(row, 1, QTableWidgetItem(e.name or ""))
+                self.equipment_table.setItem(row, 2, QTableWidgetItem(str(e.equipment_type.value) if e.equipment_type else ""))
+                self.equipment_table.setItem(row, 3, QTableWidgetItem(e.manufacturer or ""))
+                self.equipment_table.setItem(row, 4, QTableWidgetItem(e.model or ""))
+                self.equipment_table.setItem(row, 5, QTableWidgetItem(status_names.get(e.status, "")))
+                self.equipment_table.setItem(row, 6, QTableWidgetItem(e.operating_hours or "0"))
+                self.equipment_table.setItem(row, 7, QTableWidgetItem(e.last_maintenance_date.strftime("%d.%m.%Y") if e.last_maintenance_date else ""))
+                self.equipment_table.setItem(row, 8, QTableWidgetItem(e.next_maintenance_date.strftime("%d.%m.%Y") if e.next_maintenance_date else ""))
+                self.equipment_table.setItem(row, 9, QTableWidgetItem(e.current_location or ""))
+                self.equipment_table.setItem(row, 10, QTableWidgetItem(""))
+                
+                self.equipment_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, str(e.id))
+        finally:
+            session.close()
+
+
+class VehicleDialog(QDialog):
+    """Dialog zum Erstellen/Bearbeiten von Fahrzeugen"""
+    
+    def __init__(self, db_service, vehicle_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.vehicle_id = vehicle_id
+        self.user = user
+        self.setup_ui()
+        if vehicle_id:
+            self.load_vehicle()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Neues Fahrzeug" if not self.vehicle_id else "Fahrzeug bearbeiten")
+        self.setMinimumSize(600, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.license_plate = QLineEdit()
+        self.license_plate.setPlaceholderText("z.B. M-AB 1234")
+        form.addRow("Kennzeichen*:", self.license_plate)
+        
+        self.vehicle_type = QComboBox()
+        self.vehicle_type.addItem("PKW", "pkw")
+        self.vehicle_type.addItem("Transporter", "transporter")
+        self.vehicle_type.addItem("LKW", "lkw")
+        self.vehicle_type.addItem("LKW mit Anhänger", "lkw_anhaenger")
+        self.vehicle_type.addItem("Sattelzug", "sattelzug")
+        self.vehicle_type.addItem("Pritsche", "pritsche")
+        self.vehicle_type.addItem("Kipper", "kipper")
+        self.vehicle_type.addItem("Tieflader", "tieflader")
+        self.vehicle_type.addItem("LKW mit Kran", "kran_lkw")
+        self.vehicle_type.addItem("Anhänger", "anhaenger")
+        self.vehicle_type.addItem("Sonstige", "sonstige")
+        form.addRow("Fahrzeugtyp*:", self.vehicle_type)
+        
+        self.manufacturer = QLineEdit()
+        self.manufacturer.setPlaceholderText("z.B. Mercedes-Benz")
+        form.addRow("Hersteller:", self.manufacturer)
+        
+        self.model = QLineEdit()
+        self.model.setPlaceholderText("z.B. Sprinter 316 CDI")
+        form.addRow("Modell:", self.model)
+        
+        self.vin = QLineEdit()
+        self.vin.setPlaceholderText("Fahrgestellnummer")
+        form.addRow("FIN (VIN):", self.vin)
+        
+        self.first_registration = QDateEdit()
+        self.first_registration.setCalendarPopup(True)
+        self.first_registration.setSpecialValueText("Nicht angegeben")
+        form.addRow("Erstzulassung:", self.first_registration)
+        
+        self.status = QComboBox()
+        self.status.addItem("Verfügbar", "available")
+        self.status.addItem("Im Einsatz", "in_use")
+        self.status.addItem("In Wartung", "maintenance")
+        self.status.addItem("In Reparatur", "repair")
+        self.status.addItem("Reserviert", "reserved")
+        self.status.addItem("Außer Betrieb", "out_of_service")
+        form.addRow("Status:", self.status)
+        
+        self.current_mileage = QSpinBox()
+        self.current_mileage.setRange(0, 9999999)
+        self.current_mileage.setSuffix(" km")
+        form.addRow("Km-Stand:", self.current_mileage)
+        
+        self.tuv_due = QDateEdit()
+        self.tuv_due.setCalendarPopup(True)
+        self.tuv_due.setSpecialValueText("Nicht angegeben")
+        form.addRow("TÜV fällig:", self.tuv_due)
+        
+        self.current_location = QLineEdit()
+        self.current_location.setPlaceholderText("Aktueller Standort")
+        form.addRow("Standort:", self.current_location)
+        
+        self.notes = QTextEdit()
+        self.notes.setMaximumHeight(80)
+        self.notes.setPlaceholderText("Notizen...")
+        form.addRow("Notizen:", self.notes)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def load_vehicle(self):
+        session = self.db.get_session()
+        try:
+            vehicle = session.get(Vehicle, uuid.UUID(self.vehicle_id))
+            if vehicle:
+                self.license_plate.setText(vehicle.license_plate or "")
+                if vehicle.vehicle_type:
+                    idx = self.vehicle_type.findData(vehicle.vehicle_type.value)
+                    if idx >= 0:
+                        self.vehicle_type.setCurrentIndex(idx)
+                self.manufacturer.setText(vehicle.manufacturer or "")
+                self.model.setText(vehicle.model or "")
+                self.vin.setText(vehicle.vin or "")
+                if vehicle.status:
+                    idx = self.status.findData(vehicle.status.value)
+                    if idx >= 0:
+                        self.status.setCurrentIndex(idx)
+                self.current_mileage.setValue(vehicle.current_mileage_km or 0)
+                self.current_location.setText(vehicle.current_location or "")
+                self.notes.setPlainText(vehicle.notes or "")
+        finally:
+            session.close()
+    
+    def save(self):
+        if not self.license_plate.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte Kennzeichen eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            if self.vehicle_id:
+                vehicle = session.get(Vehicle, uuid.UUID(self.vehicle_id))
+            else:
+                vehicle = Vehicle()
+                count = session.execute(select(func.count(Vehicle.id))).scalar() or 0
+                vehicle.vehicle_number = f"FZ{count + 1:04d}"
+                if self.user and hasattr(self.user, 'tenant_id'):
+                    vehicle.tenant_id = self.user.tenant_id
+            
+            vehicle.license_plate = self.license_plate.text().strip()
+            vehicle.vehicle_type = VehicleType(self.vehicle_type.currentData())
+            vehicle.manufacturer = self.manufacturer.text().strip() or None
+            vehicle.model = self.model.text().strip() or None
+            vehicle.vin = self.vin.text().strip() or None
+            vehicle.status = VehicleStatus(self.status.currentData())
+            vehicle.current_mileage_km = self.current_mileage.value()
+            vehicle.current_location = self.current_location.text().strip() or None
+            vehicle.notes = self.notes.toPlainText().strip() or None
+            
+            if not self.vehicle_id:
+                session.add(vehicle)
+            
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class EquipmentDialog(QDialog):
+    """Dialog zum Erstellen/Bearbeiten von Geräten"""
+    
+    def __init__(self, db_service, equipment_id=None, equipment_type=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.equipment_id = equipment_id
+        self.preset_type = equipment_type  # "crane" für Kran-Preset
+        self.user = user
+        self.setup_ui()
+        if equipment_id:
+            self.load_equipment()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Neues Gerät" if not self.equipment_id else "Gerät bearbeiten")
+        self.setMinimumSize(600, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("z.B. Autokran 50t")
+        form.addRow("Bezeichnung*:", self.name)
+        
+        self.equipment_type = QComboBox()
+        self.equipment_type.addItem("Autokran", "autokran")
+        self.equipment_type.addItem("Mobilkran", "mobilkran")
+        self.equipment_type.addItem("Gabelstapler", "gabelstapler")
+        self.equipment_type.addItem("Teleskoplader", "teleskoplader")
+        self.equipment_type.addItem("Hubarbeitsbühne", "hubsteiger")
+        self.equipment_type.addItem("Kompressor", "kompressor")
+        self.equipment_type.addItem("Generator", "generator")
+        self.equipment_type.addItem("Kettensäge", "kettensaege")
+        self.equipment_type.addItem("Kreissäge", "kreissaege")
+        self.equipment_type.addItem("Bohrmaschine", "bohrmaschine")
+        self.equipment_type.addItem("Akkuschrauber", "akkuschrauber")
+        self.equipment_type.addItem("Laser/Nivelliergerät", "laser")
+        self.equipment_type.addItem("Messgerät", "messgeraet")
+        self.equipment_type.addItem("Gerüst", "geruest")
+        self.equipment_type.addItem("Sonstiges", "sonstiges")
+        
+        if self.preset_type == "crane":
+            self.equipment_type.setCurrentIndex(0)
+        
+        form.addRow("Gerätetyp*:", self.equipment_type)
+        
+        self.manufacturer = QLineEdit()
+        self.manufacturer.setPlaceholderText("z.B. Liebherr")
+        form.addRow("Hersteller:", self.manufacturer)
+        
+        self.model_field = QLineEdit()
+        self.model_field.setPlaceholderText("z.B. LTM 1050-3.1")
+        form.addRow("Modell:", self.model_field)
+        
+        self.serial_number = QLineEdit()
+        self.serial_number.setPlaceholderText("Seriennummer")
+        form.addRow("Seriennummer:", self.serial_number)
+        
+        self.status = QComboBox()
+        self.status.addItem("Verfügbar", "available")
+        self.status.addItem("Im Einsatz", "in_use")
+        self.status.addItem("In Wartung", "maintenance")
+        self.status.addItem("In Reparatur", "repair")
+        self.status.addItem("Außer Betrieb", "out_of_service")
+        form.addRow("Status:", self.status)
+        
+        self.operating_hours = QSpinBox()
+        self.operating_hours.setRange(0, 999999)
+        self.operating_hours.setSuffix(" h")
+        form.addRow("Betriebsstunden:", self.operating_hours)
+        
+        self.current_location = QLineEdit()
+        self.current_location.setPlaceholderText("Aktueller Standort")
+        form.addRow("Standort:", self.current_location)
+        
+        self.uvv_due = QDateEdit()
+        self.uvv_due.setCalendarPopup(True)
+        self.uvv_due.setSpecialValueText("Nicht angegeben")
+        form.addRow("UVV fällig:", self.uvv_due)
+        
+        self.notes = QTextEdit()
+        self.notes.setMaximumHeight(80)
+        self.notes.setPlaceholderText("Notizen...")
+        form.addRow("Notizen:", self.notes)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def load_equipment(self):
+        session = self.db.get_session()
+        try:
+            equipment = session.get(Equipment, uuid.UUID(self.equipment_id))
+            if equipment:
+                self.name.setText(equipment.name or "")
+                if equipment.equipment_type:
+                    idx = self.equipment_type.findData(equipment.equipment_type.value)
+                    if idx >= 0:
+                        self.equipment_type.setCurrentIndex(idx)
+                self.manufacturer.setText(equipment.manufacturer or "")
+                self.model_field.setText(equipment.model or "")
+                self.serial_number.setText(equipment.serial_number or "")
+                if equipment.status:
+                    idx = self.status.findData(equipment.status.value)
+                    if idx >= 0:
+                        self.status.setCurrentIndex(idx)
+                self.operating_hours.setValue(int(equipment.operating_hours or 0))
+                self.current_location.setText(equipment.current_location or "")
+                self.notes.setPlainText(equipment.notes or "")
+        finally:
+            session.close()
+    
+    def save(self):
+        if not self.name.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte Bezeichnung eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            if self.equipment_id:
+                equipment = session.get(Equipment, uuid.UUID(self.equipment_id))
+            else:
+                equipment = Equipment()
+                count = session.execute(select(func.count(Equipment.id))).scalar() or 0
+                equipment.equipment_number = f"GE{count + 1:05d}"
+                if self.user and hasattr(self.user, 'tenant_id'):
+                    equipment.tenant_id = self.user.tenant_id
+            
+            equipment.name = self.name.text().strip()
+            equipment.equipment_type = EquipmentType(self.equipment_type.currentData())
+            equipment.manufacturer = self.manufacturer.text().strip() or None
+            equipment.model = self.model_field.text().strip() or None
+            equipment.serial_number = self.serial_number.text().strip() or None
+            equipment.status = VehicleStatus(self.status.currentData())
+            equipment.operating_hours = str(self.operating_hours.value())
+            equipment.current_location = self.current_location.text().strip() or None
+            equipment.notes = self.notes.toPlainText().strip() or None
+            
+            if not self.equipment_id:
+                session.add(equipment)
+            
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class FuelLogDialog(QDialog):
+    """Dialog zum Erfassen von Tankvorgängen"""
+    
+    def __init__(self, db_service, fuel_log_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.fuel_log_id = fuel_log_id
+        self.user = user
+        self.setup_ui()
+        self._load_vehicles()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Tankvorgang erfassen")
+        self.setMinimumSize(500, 450)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.vehicle_combo = QComboBox()
+        form.addRow("Fahrzeug*:", self.vehicle_combo)
+        
+        self.refuel_date = QDateEdit()
+        self.refuel_date.setCalendarPopup(True)
+        self.refuel_date.setDate(QDate.currentDate())
+        form.addRow("Datum*:", self.refuel_date)
+        
+        self.refuel_time = QTimeEdit()
+        self.refuel_time.setTime(QTime.currentTime())
+        form.addRow("Uhrzeit:", self.refuel_time)
+        
+        self.mileage = QSpinBox()
+        self.mileage.setRange(0, 9999999)
+        self.mileage.setSuffix(" km")
+        form.addRow("Km-Stand*:", self.mileage)
+        
+        self.fuel_type = QComboBox()
+        self.fuel_type.addItems(["Diesel", "Super E10", "Super E5", "Super Plus", "AdBlue", "LPG", "CNG", "Strom"])
+        form.addRow("Kraftstoff:", self.fuel_type)
+        
+        self.quantity = QDoubleSpinBox()
+        self.quantity.setRange(0, 9999)
+        self.quantity.setDecimals(2)
+        self.quantity.setSuffix(" Liter")
+        form.addRow("Menge*:", self.quantity)
+        
+        self.price_per_liter = QDoubleSpinBox()
+        self.price_per_liter.setRange(0, 10)
+        self.price_per_liter.setDecimals(3)
+        self.price_per_liter.setSuffix(" €/l")
+        self.price_per_liter.valueChanged.connect(self._calc_total)
+        form.addRow("Preis pro Liter:", self.price_per_liter)
+        
+        self.total_price = QDoubleSpinBox()
+        self.total_price.setRange(0, 99999)
+        self.total_price.setDecimals(2)
+        self.total_price.setSuffix(" €")
+        form.addRow("Gesamtpreis:", self.total_price)
+        
+        self.full_tank = QCheckBox("Vollgetankt")
+        self.full_tank.setChecked(True)
+        form.addRow("", self.full_tank)
+        
+        self.gas_station = QLineEdit()
+        self.gas_station.setPlaceholderText("z.B. Aral, Shell, etc.")
+        form.addRow("Tankstelle:", self.gas_station)
+        
+        self.gas_station_location = QLineEdit()
+        self.gas_station_location.setPlaceholderText("Ort der Tankstelle")
+        form.addRow("Ort:", self.gas_station_location)
+        
+        self.fuel_notes = QTextEdit()
+        self.fuel_notes.setMaximumHeight(60)
+        self.fuel_notes.setPlaceholderText("Bemerkungen...")
+        form.addRow("Notizen:", self.fuel_notes)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def _load_vehicles(self):
+        session = self.db.get_session()
+        try:
+            query = select(Vehicle).where(Vehicle.is_deleted == False).order_by(Vehicle.license_plate)
+            vehicles = session.execute(query).scalars().all()
+            self.vehicle_combo.addItem("-- Fahrzeug wählen --", None)
+            for v in vehicles:
+                self.vehicle_combo.addItem(f"{v.license_plate} - {v.manufacturer or ''} {v.model or ''}", str(v.id))
+        finally:
+            session.close()
+    
+    def _calc_total(self):
+        total = self.quantity.value() * self.price_per_liter.value()
+        self.total_price.setValue(total)
+    
+    def save(self):
+        vehicle_id = self.vehicle_combo.currentData()
+        if not vehicle_id:
+            QMessageBox.warning(self, "Fehler", "Bitte Fahrzeug auswählen.")
+            return
+        if self.quantity.value() <= 0:
+            QMessageBox.warning(self, "Fehler", "Bitte Menge eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            fuel_log = FuelLog()
+            fuel_log.vehicle_id = uuid.UUID(vehicle_id)
+            fuel_log.refuel_date = self.refuel_date.date().toPyDate()
+            fuel_log.refuel_time = self.refuel_time.time().toString("HH:mm")
+            fuel_log.mileage_km = self.mileage.value()
+            fuel_log.fuel_type = self.fuel_type.currentText()
+            fuel_log.quantity_liters = str(self.quantity.value())
+            fuel_log.price_per_liter = str(self.price_per_liter.value()) if self.price_per_liter.value() > 0 else None
+            fuel_log.total_price = str(self.total_price.value()) if self.total_price.value() > 0 else None
+            fuel_log.full_tank = self.full_tank.isChecked()
+            fuel_log.gas_station = self.gas_station.text().strip() or None
+            fuel_log.gas_station_location = self.gas_station_location.text().strip() or None
+            fuel_log.notes = self.fuel_notes.toPlainText().strip() or None
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                fuel_log.tenant_id = self.user.tenant_id
+            
+            session.add(fuel_log)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class TripLogDialog(QDialog):
+    """Dialog zum Erfassen von Fahrten (Fahrtenbuch)"""
+    
+    def __init__(self, db_service, trip_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.trip_id = trip_id
+        self.user = user
+        self.setup_ui()
+        self._load_vehicles()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Fahrt erfassen")
+        self.setMinimumSize(550, 550)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.trip_vehicle_combo = QComboBox()
+        form.addRow("Fahrzeug*:", self.trip_vehicle_combo)
+        
+        self.trip_date = QDateEdit()
+        self.trip_date.setCalendarPopup(True)
+        self.trip_date.setDate(QDate.currentDate())
+        form.addRow("Datum*:", self.trip_date)
+        
+        # Start
+        start_label = QLabel("--- Abfahrt ---")
+        start_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(start_label)
+        
+        self.start_time = QTimeEdit()
+        self.start_time.setTime(QTime(7, 0))
+        form.addRow("Abfahrtszeit:", self.start_time)
+        
+        self.start_mileage = QSpinBox()
+        self.start_mileage.setRange(0, 9999999)
+        self.start_mileage.setSuffix(" km")
+        form.addRow("Km-Stand Start*:", self.start_mileage)
+        
+        self.start_location = QLineEdit()
+        self.start_location.setPlaceholderText("z.B. Betriebshof")
+        form.addRow("Startort:", self.start_location)
+        
+        # Ende
+        end_label = QLabel("--- Ankunft ---")
+        end_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(end_label)
+        
+        self.end_time = QTimeEdit()
+        self.end_time.setTime(QTime(17, 0))
+        form.addRow("Ankunftszeit:", self.end_time)
+        
+        self.end_mileage = QSpinBox()
+        self.end_mileage.setRange(0, 9999999)
+        self.end_mileage.setSuffix(" km")
+        self.end_mileage.valueChanged.connect(self._calc_distance)
+        form.addRow("Km-Stand Ende*:", self.end_mileage)
+        
+        self.end_location = QLineEdit()
+        self.end_location.setPlaceholderText("z.B. Baustelle Müller")
+        form.addRow("Zielort:", self.end_location)
+        
+        self.distance_label = QLabel("0 km")
+        self.distance_label.setStyleSheet("font-weight: bold;")
+        form.addRow("Strecke:", self.distance_label)
+        
+        # Zweck
+        details_label = QLabel("--- Details ---")
+        details_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(details_label)
+        
+        self.trip_type = QComboBox()
+        self.trip_type.addItems(["Dienstfahrt", "Privatfahrt", "Arbeitsweg"])
+        form.addRow("Fahrtart:", self.trip_type)
+        
+        self.purpose = QLineEdit()
+        self.purpose.setPlaceholderText("z.B. Materialtransport, Baustellenbesuch")
+        form.addRow("Zweck*:", self.purpose)
+        
+        self.trip_notes = QTextEdit()
+        self.trip_notes.setMaximumHeight(60)
+        self.trip_notes.setPlaceholderText("Route, Bemerkungen...")
+        form.addRow("Notizen:", self.trip_notes)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def _load_vehicles(self):
+        session = self.db.get_session()
+        try:
+            query = select(Vehicle).where(Vehicle.is_deleted == False).order_by(Vehicle.license_plate)
+            vehicles = session.execute(query).scalars().all()
+            self.trip_vehicle_combo.addItem("-- Fahrzeug wählen --", None)
+            for v in vehicles:
+                self.trip_vehicle_combo.addItem(f"{v.license_plate} - {v.manufacturer or ''} {v.model or ''}", str(v.id))
+        finally:
+            session.close()
+    
+    def _calc_distance(self):
+        dist = self.end_mileage.value() - self.start_mileage.value()
+        self.distance_label.setText(f"{max(0, dist)} km")
+    
+    def save(self):
+        vehicle_id = self.trip_vehicle_combo.currentData()
+        if not vehicle_id:
+            QMessageBox.warning(self, "Fehler", "Bitte Fahrzeug auswählen.")
+            return
+        if not self.purpose.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte Zweck der Fahrt eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            trip = MileageLog()
+            trip.vehicle_id = uuid.UUID(vehicle_id)
+            trip.trip_date = self.trip_date.date().toPyDate()
+            trip.start_time = self.start_time.time().toString("HH:mm")
+            trip.start_mileage = self.start_mileage.value()
+            trip.start_location = self.start_location.text().strip() or None
+            trip.end_time = self.end_time.time().toString("HH:mm")
+            trip.end_mileage = self.end_mileage.value()
+            trip.end_location = self.end_location.text().strip() or None
+            trip.distance_km = max(0, self.end_mileage.value() - self.start_mileage.value())
+            
+            type_map = {"Dienstfahrt": "business", "Privatfahrt": "private", "Arbeitsweg": "commute"}
+            trip.trip_type = type_map.get(self.trip_type.currentText(), "business")
+            trip.purpose = self.purpose.text().strip()
+            trip.notes = self.trip_notes.toPlainText().strip() or None
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                trip.tenant_id = self.user.tenant_id
+            
+            session.add(trip)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class MaintenanceDialog(QDialog):
+    """Dialog zum Erfassen von Wartungen"""
+    
+    def __init__(self, db_service, maintenance_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.maintenance_id = maintenance_id
+        self.user = user
+        self.setup_ui()
+        self._load_resources()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Wartung/Reparatur erfassen")
+        self.setMinimumSize(550, 550)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.resource_type = QComboBox()
+        self.resource_type.addItems(["Fahrzeug", "Gerät/Maschine"])
+        self.resource_type.currentIndexChanged.connect(self._on_type_changed)
+        form.addRow("Typ:", self.resource_type)
+        
+        self.maint_vehicle_combo = QComboBox()
+        form.addRow("Fahrzeug:", self.maint_vehicle_combo)
+        
+        self.maint_equipment_combo = QComboBox()
+        self.maint_equipment_combo.setVisible(False)
+        form.addRow("Gerät:", self.maint_equipment_combo)
+        
+        self.maintenance_date = QDateEdit()
+        self.maintenance_date.setCalendarPopup(True)
+        self.maintenance_date.setDate(QDate.currentDate())
+        form.addRow("Datum*:", self.maintenance_date)
+        
+        self.maintenance_type = QComboBox()
+        self.maintenance_type.addItems([
+            "Inspektion", "Ölwechsel", "Reifenwechsel", "TÜV/HU", "AU",
+            "UVV-Prüfung", "Reparatur", "Unfall", "Bremsen", "Elektrik", "Sonstiges"
+        ])
+        form.addRow("Art*:", self.maintenance_type)
+        
+        self.maint_mileage = QSpinBox()
+        self.maint_mileage.setRange(0, 9999999)
+        self.maint_mileage.setSuffix(" km")
+        form.addRow("Km-Stand:", self.maint_mileage)
+        
+        self.maint_description = QTextEdit()
+        self.maint_description.setMaximumHeight(80)
+        self.maint_description.setPlaceholderText("Beschreibung der durchgeführten Arbeiten...")
+        form.addRow("Beschreibung:", self.maint_description)
+        
+        self.workshop = QLineEdit()
+        self.workshop.setPlaceholderText("Name der Werkstatt")
+        form.addRow("Werkstatt:", self.workshop)
+        
+        self.parts_cost = QDoubleSpinBox()
+        self.parts_cost.setRange(0, 999999)
+        self.parts_cost.setDecimals(2)
+        self.parts_cost.setSuffix(" €")
+        self.parts_cost.valueChanged.connect(self._calc_total)
+        form.addRow("Materialkosten:", self.parts_cost)
+        
+        self.labor_cost = QDoubleSpinBox()
+        self.labor_cost.setRange(0, 999999)
+        self.labor_cost.setDecimals(2)
+        self.labor_cost.setSuffix(" €")
+        self.labor_cost.valueChanged.connect(self._calc_total)
+        form.addRow("Arbeitskosten:", self.labor_cost)
+        
+        self.total_cost = QDoubleSpinBox()
+        self.total_cost.setRange(0, 999999)
+        self.total_cost.setDecimals(2)
+        self.total_cost.setSuffix(" €")
+        form.addRow("Gesamtkosten:", self.total_cost)
+        
+        self.next_maintenance = QDateEdit()
+        self.next_maintenance.setCalendarPopup(True)
+        self.next_maintenance.setSpecialValueText("Nicht festgelegt")
+        form.addRow("Nächste Wartung:", self.next_maintenance)
+        
+        self.maint_notes = QTextEdit()
+        self.maint_notes.setMaximumHeight(60)
+        self.maint_notes.setPlaceholderText("Weitere Bemerkungen...")
+        form.addRow("Notizen:", self.maint_notes)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def _load_resources(self):
+        session = self.db.get_session()
+        try:
+            vehicles = session.execute(
+                select(Vehicle).where(Vehicle.is_deleted == False).order_by(Vehicle.license_plate)
+            ).scalars().all()
+            self.maint_vehicle_combo.addItem("-- Fahrzeug wählen --", None)
+            for v in vehicles:
+                self.maint_vehicle_combo.addItem(f"{v.license_plate} - {v.manufacturer or ''} {v.model or ''}", str(v.id))
+            
+            equipment_list = session.execute(
+                select(Equipment).where(Equipment.is_deleted == False).order_by(Equipment.name)
+            ).scalars().all()
+            self.maint_equipment_combo.addItem("-- Gerät wählen --", None)
+            for e in equipment_list:
+                self.maint_equipment_combo.addItem(f"{e.equipment_number} - {e.name}", str(e.id))
+        finally:
+            session.close()
+    
+    def _on_type_changed(self, index):
+        is_vehicle = index == 0
+        self.maint_vehicle_combo.setVisible(is_vehicle)
+        self.maint_equipment_combo.setVisible(not is_vehicle)
+    
+    def _calc_total(self):
+        total = self.parts_cost.value() + self.labor_cost.value()
+        self.total_cost.setValue(total)
+    
+    def save(self):
+        is_vehicle = self.resource_type.currentIndex() == 0
+        
+        if is_vehicle:
+            resource_id = self.maint_vehicle_combo.currentData()
+            if not resource_id:
+                QMessageBox.warning(self, "Fehler", "Bitte Fahrzeug auswählen.")
+                return
+        else:
+            resource_id = self.maint_equipment_combo.currentData()
+            if not resource_id:
+                QMessageBox.warning(self, "Fehler", "Bitte Gerät auswählen.")
+                return
+        
+        session = self.db.get_session()
+        try:
+            if is_vehicle:
+                maintenance = VehicleMaintenance()
+                maintenance.vehicle_id = uuid.UUID(resource_id)
+                maintenance.mileage_at_maintenance = self.maint_mileage.value() if self.maint_mileage.value() > 0 else None
+            else:
+                maintenance = EquipmentMaintenance()
+                maintenance.equipment_id = uuid.UUID(resource_id)
+            
+            maintenance.maintenance_date = self.maintenance_date.date().toPyDate()
+            maintenance.maintenance_type = self.maintenance_type.currentText()
+            maintenance.description = self.maint_description.toPlainText().strip() or None
+            maintenance.workshop_name = self.workshop.text().strip() or None
+            maintenance.parts_cost = str(self.parts_cost.value()) if self.parts_cost.value() > 0 else None
+            maintenance.labor_cost = str(self.labor_cost.value()) if self.labor_cost.value() > 0 else None
+            maintenance.total_cost = str(self.total_cost.value()) if self.total_cost.value() > 0 else None
+            maintenance.notes = self.maint_notes.toPlainText().strip() or None
+            
+            next_date = self.next_maintenance.date()
+            if next_date.isValid() and next_date.year() > 2000:
+                maintenance.next_maintenance_date = next_date.toPyDate()
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                maintenance.tenant_id = self.user.tenant_id
+            
+            session.add(maintenance)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()
+
+
+class ReservationDialog(QDialog):
+    """Dialog zum Erstellen von Reservierungen"""
+    
+    def __init__(self, db_service, reservation_id=None, user=None, parent=None):
+        super().__init__(parent)
+        self.db = db_service
+        self.reservation_id = reservation_id
+        self.user = user
+        self.setup_ui()
+        self._load_resources()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Reservierung erstellen")
+        self.setMinimumSize(500, 450)
+        
+        layout = QVBoxLayout(self)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        self.res_resource_type = QComboBox()
+        self.res_resource_type.addItems(["Fahrzeug", "Gerät/Maschine"])
+        self.res_resource_type.currentIndexChanged.connect(self._on_type_changed)
+        form.addRow("Ressourcentyp:", self.res_resource_type)
+        
+        self.res_vehicle_combo = QComboBox()
+        form.addRow("Fahrzeug:", self.res_vehicle_combo)
+        
+        self.res_equipment_combo = QComboBox()
+        self.res_equipment_combo.setVisible(False)
+        form.addRow("Gerät:", self.res_equipment_combo)
+        
+        period_label = QLabel("--- Zeitraum ---")
+        period_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(period_label)
+        
+        self.res_start_date = QDateEdit()
+        self.res_start_date.setCalendarPopup(True)
+        self.res_start_date.setDate(QDate.currentDate())
+        form.addRow("Von Datum*:", self.res_start_date)
+        
+        self.res_start_time = QTimeEdit()
+        self.res_start_time.setTime(QTime(7, 0))
+        form.addRow("Von Uhrzeit:", self.res_start_time)
+        
+        self.res_end_date = QDateEdit()
+        self.res_end_date.setCalendarPopup(True)
+        self.res_end_date.setDate(QDate.currentDate())
+        form.addRow("Bis Datum*:", self.res_end_date)
+        
+        self.res_end_time = QTimeEdit()
+        self.res_end_time.setTime(QTime(17, 0))
+        form.addRow("Bis Uhrzeit:", self.res_end_time)
+        
+        details_label = QLabel("--- Details ---")
+        details_label.setStyleSheet("font-weight: bold; color: #374151;")
+        form.addRow(details_label)
+        
+        self.res_purpose = QLineEdit()
+        self.res_purpose.setPlaceholderText("z.B. Baustelle Müller, Materialtransport")
+        form.addRow("Zweck*:", self.res_purpose)
+        
+        self.res_status = QComboBox()
+        self.res_status.addItem("Ausstehend", "pending")
+        self.res_status.addItem("Bestätigt", "confirmed")
+        form.addRow("Status:", self.res_status)
+        
+        self.res_notes = QTextEdit()
+        self.res_notes.setMaximumHeight(60)
+        self.res_notes.setPlaceholderText("Zusätzliche Informationen...")
+        form.addRow("Notizen:", self.res_notes)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("💾 Speichern")
+        save_btn.setStyleSheet(get_button_style('primary'))
+        save_btn.clicked.connect(self.save)
+        btn_layout.addWidget(save_btn)
+        
+        layout.addLayout(btn_layout)
+    
+    def _load_resources(self):
+        session = self.db.get_session()
+        try:
+            vehicles = session.execute(
+                select(Vehicle).where(Vehicle.is_deleted == False).order_by(Vehicle.license_plate)
+            ).scalars().all()
+            self.res_vehicle_combo.addItem("-- Fahrzeug wählen --", None)
+            for v in vehicles:
+                self.res_vehicle_combo.addItem(f"{v.license_plate} - {v.manufacturer or ''} {v.model or ''}", str(v.id))
+            
+            equipment_list = session.execute(
+                select(Equipment).where(Equipment.is_deleted == False).order_by(Equipment.name)
+            ).scalars().all()
+            self.res_equipment_combo.addItem("-- Gerät wählen --", None)
+            for e in equipment_list:
+                self.res_equipment_combo.addItem(f"{e.equipment_number} - {e.name}", str(e.id))
+        finally:
+            session.close()
+    
+    def _on_type_changed(self, index):
+        is_vehicle = index == 0
+        self.res_vehicle_combo.setVisible(is_vehicle)
+        self.res_equipment_combo.setVisible(not is_vehicle)
+    
+    def save(self):
+        is_vehicle = self.res_resource_type.currentIndex() == 0
+        
+        if is_vehicle:
+            resource_id = self.res_vehicle_combo.currentData()
+            if not resource_id:
+                QMessageBox.warning(self, "Fehler", "Bitte Fahrzeug auswählen.")
+                return
+        else:
+            resource_id = self.res_equipment_combo.currentData()
+            if not resource_id:
+                QMessageBox.warning(self, "Fehler", "Bitte Gerät auswählen.")
+                return
+        
+        if not self.res_purpose.text().strip():
+            QMessageBox.warning(self, "Fehler", "Bitte Zweck der Reservierung eingeben.")
+            return
+        
+        session = self.db.get_session()
+        try:
+            reservation = EquipmentReservation()
+            
+            if is_vehicle:
+                reservation.vehicle_id = uuid.UUID(resource_id)
+            else:
+                reservation.equipment_id = uuid.UUID(resource_id)
+            
+            reservation.start_date = self.res_start_date.date().toPyDate()
+            reservation.start_time = self.res_start_time.time().toString("HH:mm")
+            reservation.end_date = self.res_end_date.date().toPyDate()
+            reservation.end_time = self.res_end_time.time().toString("HH:mm")
+            reservation.purpose = self.res_purpose.text().strip()
+            reservation.status = self.res_status.currentData()
+            reservation.notes = self.res_notes.toPlainText().strip() or None
+            
+            # reserved_by_id verweist auf employees - nicht setzen
+            
+            if self.user and hasattr(self.user, 'tenant_id'):
+                reservation.tenant_id = self.user.tenant_id
+            
+            session.add(reservation)
+            session.commit()
+            self.accept()
+            
+        except Exception as e:
+            session.rollback()
+            QMessageBox.warning(self, "Fehler", f"Fehler beim Speichern: {e}")
+        finally:
+            session.close()

@@ -100,7 +100,8 @@ from shared.models.payroll import (
 
 # Finance Models
 from shared.models.finance import (
-    BankAccount, Payment, PaymentAllocation,
+    BankAccount, BankAccountModel, OnlineBankingTransaction, BankTransactionModel,
+    Payment, PaymentAllocation,
     SepaMandate, SepaBatch, DunningRun, DunningNotice, DunningNoticeItem,
     DunningBlock, CashFlowForecast, CashFlowForecastItem, FinancialKPI,
     Loan, LoanPayment, FinanceSettings,
@@ -178,7 +179,8 @@ __all__ = [
     "PayrollStatus", "PayrollPaymentMethod", "DeductionType", "AllowanceType",
     
     # Finance
-    "BankAccount", "Payment", "PaymentAllocation",
+    "BankAccount", "BankAccountModel", "OnlineBankingTransaction", "BankTransactionModel",
+    "Payment", "PaymentAllocation",
     "SepaMandate", "SepaBatch", "DunningRun", "DunningNotice", "DunningNoticeItem",
     "DunningBlock", "CashFlowForecast", "CashFlowForecastItem", "FinancialKPI",
     "Loan", "LoanPayment", "FinanceSettings",
