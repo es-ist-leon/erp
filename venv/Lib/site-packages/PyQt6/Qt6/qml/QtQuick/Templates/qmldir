@@ -5,5 +5,4 @@ classname QtQuickTemplates2Plugin
 typeinfo plugins.qmltypes
 depends QtQuick auto
 prefer :/qt-project.org/imports/QtQuick/Templates/
-depends QtQuick
 
